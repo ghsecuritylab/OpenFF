@@ -1,0 +1,52 @@
+========================================
+ wnr612v2 Build Instructions
+
+ Version: 
+ Date   : 
+======================================== 
+
+Note: 1) This package has been built successfully on Fedora Core 7.
+      2) Compiling this package on platforms other than Fedora Core 7 
+         may have unexpected results.
+      3) The user who wants to build the code must have the privilege 
+         to execute "sudo" command.
+
+===================
+ Build code
+===================
+
+1. Download  "wnr612v2-Vd1.d2.d3.d4_src.tar.bz2.zip". 
+
+	Where d1, d2, d3 and d4 mean firmware version.
+
+2. Run the following commands to extract source:
+
+        unzip -p wnr612v2-Vd1.d2.d3.d4_src.tar.bz2.zip | tar xfj -
+
+	Where d1, d2, d3 and d4 mean firmware version.
+		
+3. Change to the directory "wnr612v2".
+        cd wnr612v2
+        chmod +x scripts/*
+
+4. Run the following command to build image
+	make V=99 FIRMWARE_REGION="XX"
+
+	Where XX is one of KO, PR, PT, RU and WW
+
+    Note that developers must be able to access internet, some of pacakges are
+    downloaded while building.
+	
+5. The final image is 
+		"wnr612v2/bin/wnr612v2-Vd1.d2.d3.d4_m1.m2.m3XX.img". 
+
+	Where 
+		d1, d2, d3 and d4 mean firmware version.
+		m1, m2 and m3 mean firmware subversion
+		XX is one of KO, PR, PT, and RU
+	
+	Note that there is no XX in WW region image.
+		
+   After image is built successfully, user may upload this image to device
+   via WEB GUI "Router Upgrade" page.
+    

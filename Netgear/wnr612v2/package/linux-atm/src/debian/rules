@@ -1,0 +1,136 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This is the debhelper compatability version to use.
+export DH_COMPAT=4
+
+export PACKAGE=linux-atm
+
+buildindeppackages=atm-dev
+buildarchpackages=atm-tools libatm1 libatm1-dev
+
+# generate -ppackage1 -ppackage2 ... commandline for debhelper
+dhbuildarchpackages=$(addprefix -p,$(buildarchpackages))
+dhbuildindeppackages=$(addprefix -p,$(buildindeppackages))
+
+include /usr/share/dpatch/dpatch.make
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	./configure --prefix /usr --mandir /usr/share/man --sysconfdir /etc
+	touch configure-stamp
+
+build: configure-stamp build-stamp
+build-stamp: patch-stamp
+	dh_testdir
+
+	# Add here commands to compile the package.
+	$(MAKE) $(EXTRA_VARS)
+	cat debian/copyright.header COPYING > debian/copyright
+
+	touch build-stamp
+
+clean: clean1 unpatch
+clean1:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	# Add here commands to clean up after the build process.
+	-$(MAKE) distclean
+
+	dh_clean
+	rm -rf debian/atm-tools.8 debian/copyright
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	# Add here commands to install the package into debian/atm-tools
+	$(MAKE) DESTDIR=`pwd`/debian/tmp install
+
+        # manpages
+	/usr/bin/pod2man --section=8 --release="atm-tools $(PKG_VER)" --lax \
+	--center="Debian GNU/Linux" debian/atm-tools.pod > debian/atm-tools.8
+
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/aread.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/awrite.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/enitune.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/ilmid.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/saaldump.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/sonetdiag.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/ttcp_atm.8
+	ln -s atm-tools.8 debian/tmp/usr/share/man/man8/zntune.8
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir $(dhbuildindeppackages)
+	dh_testroot $(dhbuildindeppackages)
+	dh_install $(dhbuildindeppackages)
+
+#	dh_installdebconf $(dhbuildindeppackages)
+	dh_installdocs $(dhbuildindeppackages)
+	dh_installmenu $(dhbuildindeppackages)
+#	dh_installlogrotate $(dhbuildindeppackages)
+#	dh_installemacsen $(dhbuildindeppackages)
+#	dh_installpam $(dhbuildindeppackages)
+#	dh_installmime $(dhbuildindeppackages)
+	dh_installinit  $(dhbuildindeppackages) --init-script=atm -- start 34 0 6 . start 39 S .
+	dh_installcron $(dhbuildindeppackages)
+	dh_installman $(dhbuildindeppackages)
+	dh_installinfo $(dhbuildindeppackages)
+#	dh_undocumented $(dhbuildindeppackages)
+	dh_installchangelogs -i ChangeLog $(dhbuildpackages)
+	dh_link $(dhbuildindeppackages)
+	dh_strip $(dhbuildindeppackages)
+	dh_compress $(dhbuildindeppackages)
+	dh_fixperms $(dhbuildindeppackages)
+	dh_makeshlibs $(dhbuildindeppackages)
+	dh_installdeb $(dhbuildindeppackages)
+#	dh_perl $(dhbuildindeppackages)
+	dh_shlibdeps  $(dhbuildindeppackages)
+	dh_gencontrol $(dhbuildindeppackages)
+	dh_md5sums $(dhbuildindeppackages)
+	dh_builddeb $(dhbuildindeppackages)
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir $(dhbuildarchpackages)
+	dh_testroot $(dhbuildarchpackages)
+	dh_install $(dhbuildarchpackages)
+
+#	dh_installdebconf $(dhbuildarchpackages)
+	dh_installdocs $(dhbuildarchpackages)
+	dh_installmenu $(dhbuildarchpackages)
+#	dh_installlogrotate $(dhbuildarchpackages)
+#	dh_installemacsen $(dhbuildarchpackages)
+#	dh_installpam $(dhbuildarchpackages)
+#	dh_installmime $(dhbuildarchpackages)
+	dh_installinit $(dhbuildarchpackages) --init-script=atm -- start 34 0 6 . start 39 S .
+	dh_installcron $(dhbuildarchpackages)
+	dh_installman $(dhbuildarchpackages)
+	dh_installinfo $(dhbuildarchpackages)
+#	dh_undocumented $(dhbuildarchpackages)
+	dh_installchangelogs -a ChangeLog $(dhbuildarchpackages)
+	dh_link $(dhbuildarchpackages)
+	dh_strip $(dhbuildarchpackages)
+	dh_compress $(dhbuildarchpackages)
+	dh_fixperms $(dhbuildarchpackages)
+	dh_makeshlibs $(dhbuildarchpackages)
+	dh_installdeb $(dhbuildarchpackages)
+#	dh_perl $(dhbuildarchpackages)
+	dh_shlibdeps  -a -L libatm1 -l debian/libatm1/lib $(dhbuildarchpackages)
+	dh_gencontrol $(dhbuildarchpackages)
+	dh_md5sums $(dhbuildarchpackages)
+	dh_builddeb $(dhbuildarchpackages)
+
+binary: binary-indep binary-arch
+.PHONY: build binary-indep binary-arch binary install configure
+	get-2684 patch unpatch clean1

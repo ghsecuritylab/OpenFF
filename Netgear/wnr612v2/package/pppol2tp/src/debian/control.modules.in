@@ -1,0 +1,21 @@
+Source: pppol2tp-kmod
+Section: Networking
+Priority: optional
+Maintainer: James Chapman <jchapman@katalix.com>
+Build-Depends: debhelper (>= 5), linux-headers
+Standards-Version: 3.7.2
+
+Package: pppol2tp-kmod-modules-_KVERS_
+Architecture: i386
+Provides: pppol2tp-kmod-modules
+Description: pppol2tp-kmod modules for Linux (kernel _KVERS_).
+ This package contains the compiled pppol2tp kernel module for _KVERS_
+ which provides a PPP-over-L2TP socket for use by L2TP daemons.
+ The driver handles is integrated with the Linux kernel networking
+ subsystem such that PPP data frames carried over L2TP are handled
+ entirely by the kernel.
+ .
+ If you have compiled your own kernel, you will most likely need to build
+ your own pppol2tp-kmod-modules. The pppol2tp-kmod-source package has been
+ provided for use with the Debian's module-assistant or kernel-package
+ utilities to produce a version of pppol2tp-kmod-modules for your kernel.

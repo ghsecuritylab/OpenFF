@@ -1,0 +1,11 @@
+--- uClibc-0.9.28/libc/inet/resolv.c	2009-04-20 14:21:21.000000000 +0800
++++ uClibc-0.9.28/libc/inet/resolv.c.new	2009-04-20 14:21:43.000000000 +0800
+@@ -1092,7 +1092,7 @@
+ 	static struct hostent h;
+ 	static char buf[sizeof(struct in_addr) +
+ 			sizeof(struct in_addr *)*2 +
+-			sizeof(char *)*(ALIAS_DIM) + 384/*namebuffer*/ + 32/* margin */];
++			sizeof(char *)*(ALIAS_DIM) + 1024/*namebuffer*/ + 32/* margin */];
+ 	struct hostent *hp;
+ 
+ 	gethostbyname_r(name, &h, buf, sizeof(buf), &hp, &h_errno);

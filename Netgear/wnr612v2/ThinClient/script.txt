@@ -1,0 +1,175 @@
+//Section for System initial:
+[system]
+TIME
+// this system will prompt '#' as response
+PROMPT='#'
+cat /proc/version
+cat /proc/uptime
+ps
+cat /firmware_version
+cat /proc/stat
+cat /proc/modules
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/cmdline
+cat /proc/iomem
+cat /proc/mounts
+cat /proc/cpuinfo
+nvram show
+DELAY=2
+
+cat /proc/kmsg &
+cat /proc/net/arp
+cat /proc/net/tcp
+cat /proc/net/udp
+cat /proc/net/packet
+cat /proc/net/unix
+cat /proc/net/raw
+ifconfig
+
+cat /proc/meminfo
+cat /proc/slabinfo
+ls -al /tmp
+cat /tmp/resolv.conf
+
+//Section for System periodical log:
+// continue display system tasks, interrupt, modules, and memory
+REPEAT_BEGIN
+TIME
+ps
+cat /firmware_version
+cat /proc/stat
+cat /proc/modules
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/proc/cmdline
+cat /proc/iomem
+cat /proc/mounts
+cat /proc/cpuinfo
+nvram show
+DELAY=2
+
+cat /proc/kmsg
+cat /proc/net/arp
+cat /proc/net/tcp
+cat /proc/net/udp
+cat /proc/net/packet
+cat /proc/net/unix
+cat /proc/net/raw
+ifconfig
+
+cat /proc/meminfo
+cat /proc/slabinfo
+ls -al /tmp
+cat /tmp/resolv.conf
+
+killall -SIGUSR1 udhcpd
+cat /tmp/udhcpd.conf
+cat /tmp/udhcpd.leases
+cat /tmp/udhcpd_resrv.conf
+cat /tmp/udhcpd.pid
+ls -al /tmp/var/run
+DELAY=10
+REPEAT=2
+
+
+
+
+
+//For DHCP periodically log
+[DHCP]
+// this is for DHCP WAN capturing, repeat forever; Oct, 14, 2007
+// To print all traffic between local hosts and hosts on network 10.0.0 
+tcpdump net 10.0.0
+REPEAT_BEGIN
+TIME
+killall -SIGUSR1 udhcpd
+cat /tmp/udhcpd.conf
+cat /tmp/udhcpd.leases
+cat /tmp/udhcpd_resrv.conf
+cat /tmp/udhcpd.pid
+cat /tmp/dhcpc0.expires
+ls -al /tmp/var/run
+DELAY=120
+// repeat forever until problem occurs or manually stop
+REPEAT=0		
+
+//For PPPoE periodical log
+[PPPoE]
+// this is for PPPoE WAN capturing forever, and display PPPoE state machine for 500 
+// times; Oct, 14, 2007
+// start to capture WAN traffic
+tcpdump ¨Ci eth1
+REPEAT_BEGIN
+TIME
+cat /tmp/ppp/pppoe_session
+cat /tmp/ppp/options
+cat /tmp/ppp/pap-secrets
+cat /tmp/ppp/chap-secrets
+// display ip information
+cat /tmp/ppp/resolv.conf
+cat /tmp/ppp/link.ppp0
+cat /tmp/ppp/linkstart.ppp0
+cat /tmp/PADO
+DELAY=30
+REPEAT=0
+
+//For PPTP periodical log
+[PPTP]
+// this is for PPTP WAN capturing forever
+// times; Oct, 14, 2007
+// start to capture WAN traffic
+tcpdump ¨Ci eth1
+REPEAT_BEGIN
+TIME
+cat /tmp/ppp/pppoe_session
+cat /tmp/ppp/options
+cat /tmp/ppp/pap-secrets
+cat /tmp/ppp/chap-secrets
+// display ip information
+cat /tmp/ppp/resolv.conf
+cat /tmp/ppp/link.ppp0
+cat /tmp/ppp/linkstart.ppp0
+cat /tmp/PADO
+DELAY=30
+REPEAT=0
+
+//For BPA periodical log
+[BPA]
+// this is for BPA WAN capturing forever
+// times; Oct, 14, 2007
+// start to capture WAN traffic
+REPEAT_BEGIN
+TIME
+cat /tmp/ppp/pppoe_session
+cat /tmp/ppp/options
+cat /tmp/ppp/pap-secrets
+cat /tmp/ppp/chap-secrets
+// display ip information
+cat /tmp/ppp/resolv.conf
+cat /tmp/ppp/link.ppp0
+cat /tmp/ppp/linkstart.ppp0
+cat /tmp/PADO
+DELAY=30
+REPEAT=0
+
+//For Static IP periodical log
+[Static IP]
+// this is for Static IP WAN capturing forever
+// times; Oct, 14, 2007
+// start to capture WAN traffic
+REPEAT_BEGIN
+TIME
+cat /tmp/ppp/pppoe_session
+cat /tmp/ppp/options
+cat /tmp/ppp/pap-secrets
+cat /tmp/ppp/chap-secrets
+// display ip information
+cat /tmp/ppp/resolv.conf
+cat /tmp/ppp/link.ppp0
+cat /tmp/ppp/linkstart.ppp0
+cat /tmp/PADO
+DELAY=30
+REPEAT=0

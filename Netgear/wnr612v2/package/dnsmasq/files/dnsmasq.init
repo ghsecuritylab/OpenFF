@@ -1,0 +1,11 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+start() {
+	/usr/sbin/dnsmasq -h -r /tmp/resolv.conf
+	/sbin/ddns start
+}
+
+stop() {
+	killall dnsmasq
+}

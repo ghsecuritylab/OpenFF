@@ -1,0 +1,932 @@
+/* 
+  Kernel module to match application layer (OSI layer 7) 
+  data in connections.
+  
+  http://l7-filter.sf.net
+
+  By Matthew Strait and Ethan Sommer, 2003-2005.
+
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version
+  2 of the License, or (at your option) any later version.
+  http://www.gnu.org/licenses/gpl.txt
+
+  Based on ipt_string.c (C) 2000 Emmanuel Roger <winfield@freegates.be>
+  and cls_layer7.c (C) 2003 Matthew Strait, Ethan Sommer, Justin Levandoski
+*/
+
+#include <linux/module.h>
+#include <linux/skbuff.h>
+#include <linux/netfilter_ipv4/ip_conntrack.h>
+#include <linux/proc_fs.h>
+#include <linux/ctype.h>
+#include <net/ip.h>
+#include <net/tcp.h>
+#include <linux/spinlock.h>
+
+#include "regexp/regexp.c"
+
+#include <linux/netfilter_ipv4/ipt_layer7.h>
+#include <linux/netfilter_ipv4/ip_tables.h>
+
+MODULE_AUTHOR("Matthew Strait <quadong@users.sf.net>, Ethan Sommer <sommere@users.sf.net>");
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("iptables application layer match module");
+MODULE_VERSION("2.2");
+
+static int maxdatalen = 2048; // this is the default
+module_param(maxdatalen, int, 0444);
+MODULE_PARM_DESC(maxdatalen, "maximum bytes of data looked at by l7-filter");
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+//int flag=1;
+extern int p2p_session_max;
+extern int p2p_session_count;
+extern void call_death_by_timeout(unsigned long ul_conntrack);
+#endif
+
+#ifdef CONFIG_IP_NF_MATCH_LAYER7_DEBUG
+	#define DPRINTK(format,args...) printk(format,##args)
+#else
+	#define DPRINTK(format,args...)
+#endif
+
+#define TOTAL_PACKETS master_conntrack->counters[IP_CT_DIR_ORIGINAL].packets + \
+		      master_conntrack->counters[IP_CT_DIR_REPLY].packets
+
+/* Number of packets whose data we look at.
+This can be modified through /proc/net/layer7_numpackets */
+static char g_app_data[MAX_PATTERN_LEN];
+static int is_init=1;
+static int num_packets=20;
+static unsigned long su_ip=0;
+int gQosEnabled=0;
+EXPORT_SYMBOL(gQosEnabled);
+static char gQosSetting[4];
+/* Hard code for all expression of protocol. It's better to read them from *.pat files. */
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+static struct ipt_layer7_info matchinfo[] =
+{
+	{"bittorrent", "^(\\x13bittorrent protocol|azver\\x01$|[Gg][Ee][Tt] /scrape\\?info_hash=)|d1:ad2:id20:|\\x08'7P\\)[RP]", 1, 6, 1},
+	{"edonkey", "^[\\xc5\\xd4\\xe3-\\xe5].?.?.?.?([\\x01\\x02\\x05\\x14\\x15\\x16\\x18\\x19\\x1a\\x1b\\x1c\\x20\\x21\\x32\\x33\\x34\\x35\\x36\\x38\\x40\\x41\\x42\\x43\\x46\\x47\\x48\\x49\\x4a\\x4b\\x4c\\x4d\\x4e\\x4f\\x50\\x51\\x52\\x53\\x54\\x55\\x56\\x57\\x58[\\x60\\x81\\x82\\x90\\x91\\x93\\x96\\x97\\x98\\x99\\x9a\\x9b\\x9c\\x9e\\xa0\\xa1\\xa2\\xa3\\xa4]|\\x59................?[ -~]|\\x96....$)", 1, 6, 1},
+	{"skypetoskype", "^..\\x02.............", 4, 9, 0},
+/*
+	{"skypeout", "^(\\x01.?.?.?.?.?.?.?.?\\x01|\\x02.?.?.?.?.?.?.?.?\\x02|\\x03.?.?.?.?.?.?.?.?\\x03|\\x04.?.?.?.?.?.?.?.?\\x04|\\x05.?.?.?.?.?.?.?.?\\x05|\\x06.?.?.?.?.?.?.?.?\\x06|\\x07.?.?.?.?.?.?.?.?\\x07|\\x08.?.?.?.?.?.?.?.?\\x08|\\x09.?.?.?.?.?.?.?.?\\x09|\\x0a.?.?.?.?.?.?.?.?\\x0a|\\x0b.?.?.?.?.?.?.?.?\\x0b|\\x0c.?.?.?.?.?.?.?.?\\x0c|\\x0d.?.?.?.?.?.?.?.?\\x0d|\\x0e.?.?.?.?.?.?.?.?\\x0e|\\x0f.?.?.?.?.?.?.?.?\\x0f|\\x10.?.?.?.?.?.?.?.?\\x10|\\x11.?.?.?.?.?.?.?.?\\x11|\\x12.?.?.?.?.?.?.?.?\\x12\
+		|\\x13.?.?.?.?.?.?.?.?\\x13|\\x14.?.?.?.?.?.?.?.?\\x14|\\x15.?.?.?.?.?.?.?.?\\x15|\\x16.?.?.?.?.?.?.?.?\\x16|\\x17.?.?.?.?.?.?.?.?\\x17|\\x18.?.?.?.?.?.?.?.?\\x18|\\x19.?.?.?.?.?.?.?.?\\x19|\\x1a.?.?.?.?.?.?.?.?\\x1a|\\x1b.?.?.?.?.?.?.?.?\\x1b|\\x1c.?.?.?.?.?.?.?.?\\x1c|\\x1d.?.?.?.?.?.?.?.?\\x1d|\\x1e.?.?.?.?.?.?.?.?\\x1e|\\x1f.?.?.?.?.?.?.?.?\\x1f|\\x20.?.?.?.?.?.?.?.?\\x20|\\x21.?.?.?.?.?.?.?.?\\x21|\\x22.?.?.?.?.?.?.?.?\\x22|\\x23.?.?.?.?.?.?.?.?\\x23|\\$.?.?.?.?.?.?.?.?\\$|\\x25.?.?.?.?.?.?.?.?\\x25\
+		|\\x26.?.?.?.?.?.?.?.?\\x26|\\x27.?.?.?.?.?.?.?.?\\x27|\\(.?.?.?.?.?.?.?.?\\(|\\).?.?.?.?.?.?.?.?\\)|\\*.?.?.?.?.?.?.?.?\\*|\\+.?.?.?.?.?.?.?.?\\+|\\x2c.?.?.?.?.?.?.?.?\\x2c|\\x2d.?.?.?.?.?.?.?.?\\x2d|\\..?.?.?.?.?.?.?.?\\.|\\x2f.?.?.?.?.?.?.?.?\\x2f|\\x30.?.?.?.?.?.?.?.?\\x30|\\x31.?.?.?.?.?.?.?.?\\x31|\\x32.?.?.?.?.?.?.?.?\\x32|\\x33.?.?.?.?.?.?.?.?\\x33|\\x34.?.?.?.?.?.?.?.?\\x34|\\x35.?.?.?.?.?.?.?.?\\x35|\\x36.?.?.?.?.?.?.?.?\\x36|\\x37.?.?.?.?.?.?.?.?\\x37|\\x38.?.?.?.?.?.?.?.?\\x38\
+		|\\x39.?.?.?.?.?.?.?.?\\x39|\\x3a.?.?.?.?.?.?.?.?\\x3a|\\x3b.?.?.?.?.?.?.?.?\\x3b|\\x3c.?.?.?.?.?.?.?.?\\x3c|\\x3d.?.?.?.?.?.?.?.?\\x3d|\\x3e.?.?.?.?.?.?.?.?\\x3e|\\?.?.?.?.?.?.?.?.?\\?|\\x40.?.?.?.?.?.?.?.?\\x40|\\x41.?.?.?.?.?.?.?.?\\x41|\\x42.?.?.?.?.?.?.?.?\\x42|\\x43.?.?.?.?.?.?.?.?\\x43|\\x44.?.?.?.?.?.?.?.?\\x44|\\x45.?.?.?.?.?.?.?.?\\x45|\\x46.?.?.?.?.?.?.?.?\\x46|\\x47.?.?.?.?.?.?.?.?\\x47|\\x48.?.?.?.?.?.?.?.?\\x48|\\x49.?.?.?.?.?.?.?.?\\x49|\\x4a.?.?.?.?.?.?.?.?\\x4a|\\x4b.?.?.?.?.?.?.?.?\\x4b\
+		|\\x4c.?.?.?.?.?.?.?.?\\x4c|\\x4d.?.?.?.?.?.?.?.?\\x4d|\\x4e.?.?.?.?.?.?.?.?\\x4e|\\x4f.?.?.?.?.?.?.?.?\\x4f|\\x50.?.?.?.?.?.?.?.?\\x50|\\x51.?.?.?.?.?.?.?.?\\x51|\\x52.?.?.?.?.?.?.?.?\\x52|\\x53.?.?.?.?.?.?.?.?\\x53|\\x54.?.?.?.?.?.?.?.?\\x54|\\x55.?.?.?.?.?.?.?.?\\x55|\\x56.?.?.?.?.?.?.?.?\\x56|\\x57.?.?.?.?.?.?.?.?\\x57|\\x58.?.?.?.?.?.?.?.?\\x58|\\x59.?.?.?.?.?.?.?.?\\x59|\\x5a.?.?.?.?.?.?.?.?\\x5a|\\[.?.?.?.?.?.?.?.?\\[|\\\\.?.?.?.?.?.?.?.?\\\\|\\].?.?.?.?.?.?.?.?\\]|\\^.?.?.?.?.?.?.?.?\\^\
+		|\\x5f.?.?.?.?.?.?.?.?\\x5f|\\x60.?.?.?.?.?.?.?.?\\x60|\\x61.?.?.?.?.?.?.?.?\\x61|\\x62.?.?.?.?.?.?.?.?\\x62|\\x63.?.?.?.?.?.?.?.?\\x63|\\x64.?.?.?.?.?.?.?.?\\x64|\\x65.?.?.?.?.?.?.?.?\\x65|\\x66.?.?.?.?.?.?.?.?\\x66|\\x67.?.?.?.?.?.?.?.?\\x67|\\x68.?.?.?.?.?.?.?.?\\x68|\\x69.?.?.?.?.?.?.?.?\\x69|\\x6a.?.?.?.?.?.?.?.?\\x6a|\\x6b.?.?.?.?.?.?.?.?\\x6b|\\x6c.?.?.?.?.?.?.?.?\\x6c|\\x6d.?.?.?.?.?.?.?.?\\x6d|\\x6e.?.?.?.?.?.?.?.?\\x6e|\\x6f.?.?.?.?.?.?.?.?\\x6f|\\x70.?.?.?.?.?.?.?.?\\x70|\\x71.?.?.?.?.?.?.?.?\\x71\
+		|\\x72.?.?.?.?.?.?.?.?\\x72|\\x73.?.?.?.?.?.?.?.?\\x73|\\x74.?.?.?.?.?.?.?.?\\x74|\\x75.?.?.?.?.?.?.?.?\\x75|\\x76.?.?.?.?.?.?.?.?\\x76|\\x77.?.?.?.?.?.?.?.?\\x77|\\x78.?.?.?.?.?.?.?.?\\x78|\\x79.?.?.?.?.?.?.?.?\\x79|\\x7a.?.?.?.?.?.?.?.?\\x7a|\\{.?.?.?.?.?.?.?.?\\{|\\|.?.?.?.?.?.?.?.?\\||\\}.?.?.?.?.?.?.?.?\\}|\\x7e.?.?.?.?.?.?.?.?\\x7e|\\x7f.?.?.?.?.?.?.?.?\\x7f|\\x80.?.?.?.?.?.?.?.?\\x80|\\x81.?.?.?.?.?.?.?.?\\x81|\\x82.?.?.?.?.?.?.?.?\\x82|\\x83.?.?.?.?.?.?.?.?\\x83|\\x84.?.?.?.?.?.?.?.?\\x84|\\x85.?.?.?.?.?.?.?.?\\x85\
+		|\\x86.?.?.?.?.?.?.?.?\\x86|\\x87.?.?.?.?.?.?.?.?\\x87|\\x88.?.?.?.?.?.?.?.?\\x88|\\x89.?.?.?.?.?.?.?.?\\x89|\\x8a.?.?.?.?.?.?.?.?\\x8a|\\x8b.?.?.?.?.?.?.?.?\\x8b|\\x8c.?.?.?.?.?.?.?.?\\x8c|\\x8d.?.?.?.?.?.?.?.?\\x8d|\\x8e.?.?.?.?.?.?.?.?\\x8e|\\x8f.?.?.?.?.?.?.?.?\\x8f|\\x90.?.?.?.?.?.?.?.?\\x90|\\x91.?.?.?.?.?.?.?.?\\x91|\\x92.?.?.?.?.?.?.?.?\\x92|\\x93.?.?.?.?.?.?.?.?\\x93|\\x94.?.?.?.?.?.?.?.?\\x94|\\x95.?.?.?.?.?.?.?.?\\x95|\\x96.?.?.?.?.?.?.?.?\\x96|\\x97.?.?.?.?.?.?.?.?\\x97|\\x98.?.?.?.?.?.?.?.?\\x98|\\x99.?.?.?.?.?.?.?.?\\x99\
+		|\\x9a.?.?.?.?.?.?.?.?\\x9a|\\x9b.?.?.?.?.?.?.?.?\\x9b|\\x9c.?.?.?.?.?.?.?.?\\x9c|\\x9d.?.?.?.?.?.?.?.?\\x9d|\\x9e.?.?.?.?.?.?.?.?\\x9e|\\x9f.?.?.?.?.?.?.?.?\\x9f|\\xa0.?.?.?.?.?.?.?.?\\xa0|\\xa1.?.?.?.?.?.?.?.?\\xa1|\\xa2.?.?.?.?.?.?.?.?\\xa2|\\xa3.?.?.?.?.?.?.?.?\\xa3|\\xa4.?.?.?.?.?.?.?.?\\xa4|\\xa5.?.?.?.?.?.?.?.?\\xa5|\\xa6.?.?.?.?.?.?.?.?\\xa6|\\xa7.?.?.?.?.?.?.?.?\\xa7|\\xa8.?.?.?.?.?.?.?.?\\xa8|\\xa9.?.?.?.?.?.?.?.?\\xa9|\\xaa.?.?.?.?.?.?.?.?\\xaa|\\xab.?.?.?.?.?.?.?.?\\xab|\\xac.?.?.?.?.?.?.?.?\\xac|\\xad.?.?.?.?.?.?.?.?\\xad\
+		|\\xae.?.?.?.?.?.?.?.?\\xae|\\xaf.?.?.?.?.?.?.?.?\\xaf|\\xb0.?.?.?.?.?.?.?.?\\xb0|\\xb1.?.?.?.?.?.?.?.?\\xb1|\\xb2.?.?.?.?.?.?.?.?\\xb2|\\xb3.?.?.?.?.?.?.?.?\\xb3|\\xb4.?.?.?.?.?.?.?.?\\xb4|\\xb5.?.?.?.?.?.?.?.?\\xb5|\\xb6.?.?.?.?.?.?.?.?\\xb6|\\xb7.?.?.?.?.?.?.?.?\\xb7|\\xb8.?.?.?.?.?.?.?.?\\xb8|\\xb9.?.?.?.?.?.?.?.?\\xb9|\\xba.?.?.?.?.?.?.?.?\\xba|\\xbb.?.?.?.?.?.?.?.?\\xbb|\\xbc.?.?.?.?.?.?.?.?\\xbc|\\xbd.?.?.?.?.?.?.?.?\\xbd|\\xbe.?.?.?.?.?.?.?.?\\xbe|\\xbf.?.?.?.?.?.?.?.?\\xbf|\\xc0.?.?.?.?.?.?.?.?\\xc0|\\xc1.?.?.?.?.?.?.?.?\\xc1\
+		|\\xc2.?.?.?.?.?.?.?.?\\xc2|\\xc3.?.?.?.?.?.?.?.?\\xc3|\\xc4.?.?.?.?.?.?.?.?\\xc4|\\xc5.?.?.?.?.?.?.?.?\\xc5|\\xc6.?.?.?.?.?.?.?.?\\xc6|\\xc7.?.?.?.?.?.?.?.?\\xc7|\\xc8.?.?.?.?.?.?.?.?\\xc8|\\xc9.?.?.?.?.?.?.?.?\\xc9|\\xca.?.?.?.?.?.?.?.?\\xca|\\xcb.?.?.?.?.?.?.?.?\\xcb|\\xcc.?.?.?.?.?.?.?.?\\xcc|\\xcd.?.?.?.?.?.?.?.?\\xcd|\\xce.?.?.?.?.?.?.?.?\\xce|\\xcf.?.?.?.?.?.?.?.?\\xcf|\\xd0.?.?.?.?.?.?.?.?\\xd0|\\xd1.?.?.?.?.?.?.?.?\\xd1|\\xd2.?.?.?.?.?.?.?.?\\xd2|\\xd3.?.?.?.?.?.?.?.?\\xd3|\\xd4.?.?.?.?.?.?.?.?\\xd4|\\xd5.?.?.?.?.?.?.?.?\\xd5\
+		|\\xd6.?.?.?.?.?.?.?.?\\xd6|\\xd7.?.?.?.?.?.?.?.?\\xd7|\\xd8.?.?.?.?.?.?.?.?\\xd8|\\xd9.?.?.?.?.?.?.?.?\\xd9|\\xda.?.?.?.?.?.?.?.?\\xda|\\xdb.?.?.?.?.?.?.?.?\\xdb|\\xdc.?.?.?.?.?.?.?.?\\xdc|\\xdd.?.?.?.?.?.?.?.?\\xdd|\\xde.?.?.?.?.?.?.?.?\\xde|\\xdf.?.?.?.?.?.?.?.?\\xdf|\\xe0.?.?.?.?.?.?.?.?\\xe0|\\xe1.?.?.?.?.?.?.?.?\\xe1|\\xe2.?.?.?.?.?.?.?.?\\xe2|\\xe3.?.?.?.?.?.?.?.?\\xe3|\\xe4.?.?.?.?.?.?.?.?\\xe4|\\xe5.?.?.?.?.?.?.?.?\\xe5|\\xe6.?.?.?.?.?.?.?.?\\xe6|\\xe7.?.?.?.?.?.?.?.?\\xe7|\\xe8.?.?.?.?.?.?.?.?\\xe8|\\xe9.?.?.?.?.?.?.?.?\\xe9\
+		|\\xea.?.?.?.?.?.?.?.?\\xea|\\xeb.?.?.?.?.?.?.?.?\\xeb|\\xec.?.?.?.?.?.?.?.?\\xec|\\xed.?.?.?.?.?.?.?.?\\xed|\\xee.?.?.?.?.?.?.?.?\\xee|\\xef.?.?.?.?.?.?.?.?\\xef|\\xf0.?.?.?.?.?.?.?.?\\xf0|\\xf1.?.?.?.?.?.?.?.?\\xf1|\\xf2.?.?.?.?.?.?.?.?\\xf2|\\xf3.?.?.?.?.?.?.?.?\\xf3|\\xf4.?.?.?.?.?.?.?.?\\xf4|\\xf5.?.?.?.?.?.?.?.?\\xf5|\\xf6.?.?.?.?.?.?.?.?\\xf6|\\xf7.?.?.?.?.?.?.?.?\\xf7|\\xf8.?.?.?.?.?.?.?.?\\xf8|\\xf9.?.?.?.?.?.?.?.?\\xf9|\\xfa.?.?.?.?.?.?.?.?\\xfa|\\xfb.?.?.?.?.?.?.?.?\\xfb|\\xfc.?.?.?.?.?.?.?.?\\xfc|\\xfd.?.?.?.?.?.?.?.?\\xfd\
+		|\\xfe.?.?.?.?.?.?.?.?\\xfe|\\xff.?.?.?.?.?.?.?.?\\xff)", 10, 5, 0},
+*/
+};
+#else
+static struct ipt_layer7_info matchinfo[] =
+{
+		{"bittorrent", "^(\\x13bittorrent protocol|azver\\x01$|get /scrape\\?info_hash=)|d1:ad2:id20:|\\x08'7P\\)[RP]", 1, 6},
+    {"edonkey", "^[\\xc5\\xd4\\xe3-\\xe5].?.?.?.?([\\x01\\x02\\x05\\x14\\x15\\x16\\x18\\x19\\x1a\\x1b\\x1c\\x20\\x21\\x32\\x33\\x34\\x35\\x36\\x38\\x40\\x41\\x42\\x43\\x46\\x47\\x48\\x49\\x4a\\x4b\\x4c\\x4d\\x4e\\x4f\\x50\\x51\\x52\\x53\\x54\\x55\\x56\\x57\\x58[\\x60\\x81\\x82\\x90\\x91\\x93\\x96\\x97\\x98\\x99\\x9a\\x9b\\x9c\\x9e\\xa0\\xa1\\xa2\\xa3\\xa4]|\\x59................?[ -~]|\\x96....$)", 1, 6},
+    {"skypetoskype", "^..\\x02.............", 4, 9},
+    /*{"skypeout", "^(\\x01.?.?.?.?.?.?.?.?\\x01|\\x02.?.?.?.?.?.?.?.?\\x02|\\x03.?.?.?.?.?.?.?.?\\x03|\\x04.?.?.?.?.?.?.?.?\\x04|\\x05.?.?.?.?.?.?.?.?\\x05|\\x06.?.?.?.?.?.?.?.?\\x06|\\x07.?.?.?.?.?.?.?.?\\x07|\\x08.?.?.?.?.?.?.?.?\\x08|\\x09.?.?.?.?.?.?.?.?\\x09|\\x0a.?.?.?.?.?.?.?.?\\x0a|\\x0b.?.?.?.?.?.?.?.?\\x0b|\\x0c.?.?.?.?.?.?.?.?\\x0c|\\x0d.?.?.?.?.?.?.?.?\\x0d|\\x0e.?.?.?.?.?.?.?.?\\x0e|\\x0f.?.?.?.?.?.?.?.?\\x0f|\\x10.?.?.?.?.?.?.?.?\\x10|\\x11.?.?.?.?.?.?.?.?\\x11|\\x12.?.?.?.?.?.?.?.?\\x12\
+|\\x13.?.?.?.?.?.?.?.?\\x13|\\x14.?.?.?.?.?.?.?.?\\x14|\\x15.?.?.?.?.?.?.?.?\\x15|\\x16.?.?.?.?.?.?.?.?\\x16|\\x17.?.?.?.?.?.?.?.?\\x17|\\x18.?.?.?.?.?.?.?.?\\x18|\\x19.?.?.?.?.?.?.?.?\\x19|\\x1a.?.?.?.?.?.?.?.?\\x1a|\\x1b.?.?.?.?.?.?.?.?\\x1b|\\x1c.?.?.?.?.?.?.?.?\\x1c|\\x1d.?.?.?.?.?.?.?.?\\x1d|\\x1e.?.?.?.?.?.?.?.?\\x1e|\\x1f.?.?.?.?.?.?.?.?\\x1f|\\x20.?.?.?.?.?.?.?.?\\x20|\\x21.?.?.?.?.?.?.?.?\\x21|\\x22.?.?.?.?.?.?.?.?\\x22|\\x23.?.?.?.?.?.?.?.?\\x23|\\$.?.?.?.?.?.?.?.?\\$|\\x25.?.?.?.?.?.?.?.?\\x25\
+|\\x26.?.?.?.?.?.?.?.?\\x26|\\x27.?.?.?.?.?.?.?.?\\x27|\\(.?.?.?.?.?.?.?.?\\(|\\).?.?.?.?.?.?.?.?\\)|\\*.?.?.?.?.?.?.?.?\\*|\\+.?.?.?.?.?.?.?.?\\+|\\x2c.?.?.?.?.?.?.?.?\\x2c|\\x2d.?.?.?.?.?.?.?.?\\x2d|\\..?.?.?.?.?.?.?.?\\.|\\x2f.?.?.?.?.?.?.?.?\\x2f|\\x30.?.?.?.?.?.?.?.?\\x30|\\x31.?.?.?.?.?.?.?.?\\x31|\\x32.?.?.?.?.?.?.?.?\\x32|\\x33.?.?.?.?.?.?.?.?\\x33|\\x34.?.?.?.?.?.?.?.?\\x34|\\x35.?.?.?.?.?.?.?.?\\x35|\\x36.?.?.?.?.?.?.?.?\\x36|\\x37.?.?.?.?.?.?.?.?\\x37|\\x38.?.?.?.?.?.?.?.?\\x38\
+|\\x39.?.?.?.?.?.?.?.?\\x39|\\x3a.?.?.?.?.?.?.?.?\\x3a|\\x3b.?.?.?.?.?.?.?.?\\x3b|\\x3c.?.?.?.?.?.?.?.?\\x3c|\\x3d.?.?.?.?.?.?.?.?\\x3d|\\x3e.?.?.?.?.?.?.?.?\\x3e|\\?.?.?.?.?.?.?.?.?\\?|\\x40.?.?.?.?.?.?.?.?\\x40|\\x41.?.?.?.?.?.?.?.?\\x41|\\x42.?.?.?.?.?.?.?.?\\x42|\\x43.?.?.?.?.?.?.?.?\\x43|\\x44.?.?.?.?.?.?.?.?\\x44|\\x45.?.?.?.?.?.?.?.?\\x45|\\x46.?.?.?.?.?.?.?.?\\x46|\\x47.?.?.?.?.?.?.?.?\\x47|\\x48.?.?.?.?.?.?.?.?\\x48|\\x49.?.?.?.?.?.?.?.?\\x49|\\x4a.?.?.?.?.?.?.?.?\\x4a|\\x4b.?.?.?.?.?.?.?.?\\x4b\
+|\\x4c.?.?.?.?.?.?.?.?\\x4c|\\x4d.?.?.?.?.?.?.?.?\\x4d|\\x4e.?.?.?.?.?.?.?.?\\x4e|\\x4f.?.?.?.?.?.?.?.?\\x4f|\\x50.?.?.?.?.?.?.?.?\\x50|\\x51.?.?.?.?.?.?.?.?\\x51|\\x52.?.?.?.?.?.?.?.?\\x52|\\x53.?.?.?.?.?.?.?.?\\x53|\\x54.?.?.?.?.?.?.?.?\\x54|\\x55.?.?.?.?.?.?.?.?\\x55|\\x56.?.?.?.?.?.?.?.?\\x56|\\x57.?.?.?.?.?.?.?.?\\x57|\\x58.?.?.?.?.?.?.?.?\\x58|\\x59.?.?.?.?.?.?.?.?\\x59|\\x5a.?.?.?.?.?.?.?.?\\x5a|\\[.?.?.?.?.?.?.?.?\\[|\\\\.?.?.?.?.?.?.?.?\\\\|\\].?.?.?.?.?.?.?.?\\]|\\^.?.?.?.?.?.?.?.?\\^\
+|\\x5f.?.?.?.?.?.?.?.?\\x5f|\\x60.?.?.?.?.?.?.?.?\\x60|\\x61.?.?.?.?.?.?.?.?\\x61|\\x62.?.?.?.?.?.?.?.?\\x62|\\x63.?.?.?.?.?.?.?.?\\x63|\\x64.?.?.?.?.?.?.?.?\\x64|\\x65.?.?.?.?.?.?.?.?\\x65|\\x66.?.?.?.?.?.?.?.?\\x66|\\x67.?.?.?.?.?.?.?.?\\x67|\\x68.?.?.?.?.?.?.?.?\\x68|\\x69.?.?.?.?.?.?.?.?\\x69|\\x6a.?.?.?.?.?.?.?.?\\x6a|\\x6b.?.?.?.?.?.?.?.?\\x6b|\\x6c.?.?.?.?.?.?.?.?\\x6c|\\x6d.?.?.?.?.?.?.?.?\\x6d|\\x6e.?.?.?.?.?.?.?.?\\x6e|\\x6f.?.?.?.?.?.?.?.?\\x6f|\\x70.?.?.?.?.?.?.?.?\\x70|\\x71.?.?.?.?.?.?.?.?\\x71\
+|\\x72.?.?.?.?.?.?.?.?\\x72|\\x73.?.?.?.?.?.?.?.?\\x73|\\x74.?.?.?.?.?.?.?.?\\x74|\\x75.?.?.?.?.?.?.?.?\\x75|\\x76.?.?.?.?.?.?.?.?\\x76|\\x77.?.?.?.?.?.?.?.?\\x77|\\x78.?.?.?.?.?.?.?.?\\x78|\\x79.?.?.?.?.?.?.?.?\\x79|\\x7a.?.?.?.?.?.?.?.?\\x7a|\\{.?.?.?.?.?.?.?.?\\{|\\|.?.?.?.?.?.?.?.?\\||\\}.?.?.?.?.?.?.?.?\\}|\\x7e.?.?.?.?.?.?.?.?\\x7e|\\x7f.?.?.?.?.?.?.?.?\\x7f|\\x80.?.?.?.?.?.?.?.?\\x80|\\x81.?.?.?.?.?.?.?.?\\x81|\\x82.?.?.?.?.?.?.?.?\\x82|\\x83.?.?.?.?.?.?.?.?\\x83|\\x84.?.?.?.?.?.?.?.?\\x84|\\x85.?.?.?.?.?.?.?.?\\x85\
+|\\x86.?.?.?.?.?.?.?.?\\x86|\\x87.?.?.?.?.?.?.?.?\\x87|\\x88.?.?.?.?.?.?.?.?\\x88|\\x89.?.?.?.?.?.?.?.?\\x89|\\x8a.?.?.?.?.?.?.?.?\\x8a|\\x8b.?.?.?.?.?.?.?.?\\x8b|\\x8c.?.?.?.?.?.?.?.?\\x8c|\\x8d.?.?.?.?.?.?.?.?\\x8d|\\x8e.?.?.?.?.?.?.?.?\\x8e|\\x8f.?.?.?.?.?.?.?.?\\x8f|\\x90.?.?.?.?.?.?.?.?\\x90|\\x91.?.?.?.?.?.?.?.?\\x91|\\x92.?.?.?.?.?.?.?.?\\x92|\\x93.?.?.?.?.?.?.?.?\\x93|\\x94.?.?.?.?.?.?.?.?\\x94|\\x95.?.?.?.?.?.?.?.?\\x95|\\x96.?.?.?.?.?.?.?.?\\x96|\\x97.?.?.?.?.?.?.?.?\\x97|\\x98.?.?.?.?.?.?.?.?\\x98|\\x99.?.?.?.?.?.?.?.?\\x99\
+|\\x9a.?.?.?.?.?.?.?.?\\x9a|\\x9b.?.?.?.?.?.?.?.?\\x9b|\\x9c.?.?.?.?.?.?.?.?\\x9c|\\x9d.?.?.?.?.?.?.?.?\\x9d|\\x9e.?.?.?.?.?.?.?.?\\x9e|\\x9f.?.?.?.?.?.?.?.?\\x9f|\\xa0.?.?.?.?.?.?.?.?\\xa0|\\xa1.?.?.?.?.?.?.?.?\\xa1|\\xa2.?.?.?.?.?.?.?.?\\xa2|\\xa3.?.?.?.?.?.?.?.?\\xa3|\\xa4.?.?.?.?.?.?.?.?\\xa4|\\xa5.?.?.?.?.?.?.?.?\\xa5|\\xa6.?.?.?.?.?.?.?.?\\xa6|\\xa7.?.?.?.?.?.?.?.?\\xa7|\\xa8.?.?.?.?.?.?.?.?\\xa8|\\xa9.?.?.?.?.?.?.?.?\\xa9|\\xaa.?.?.?.?.?.?.?.?\\xaa|\\xab.?.?.?.?.?.?.?.?\\xab|\\xac.?.?.?.?.?.?.?.?\\xac|\\xad.?.?.?.?.?.?.?.?\\xad\
+|\\xae.?.?.?.?.?.?.?.?\\xae|\\xaf.?.?.?.?.?.?.?.?\\xaf|\\xb0.?.?.?.?.?.?.?.?\\xb0|\\xb1.?.?.?.?.?.?.?.?\\xb1|\\xb2.?.?.?.?.?.?.?.?\\xb2|\\xb3.?.?.?.?.?.?.?.?\\xb3|\\xb4.?.?.?.?.?.?.?.?\\xb4|\\xb5.?.?.?.?.?.?.?.?\\xb5|\\xb6.?.?.?.?.?.?.?.?\\xb6|\\xb7.?.?.?.?.?.?.?.?\\xb7|\\xb8.?.?.?.?.?.?.?.?\\xb8|\\xb9.?.?.?.?.?.?.?.?\\xb9|\\xba.?.?.?.?.?.?.?.?\\xba|\\xbb.?.?.?.?.?.?.?.?\\xbb|\\xbc.?.?.?.?.?.?.?.?\\xbc|\\xbd.?.?.?.?.?.?.?.?\\xbd|\\xbe.?.?.?.?.?.?.?.?\\xbe|\\xbf.?.?.?.?.?.?.?.?\\xbf|\\xc0.?.?.?.?.?.?.?.?\\xc0|\\xc1.?.?.?.?.?.?.?.?\\xc1\
+|\\xc2.?.?.?.?.?.?.?.?\\xc2|\\xc3.?.?.?.?.?.?.?.?\\xc3|\\xc4.?.?.?.?.?.?.?.?\\xc4|\\xc5.?.?.?.?.?.?.?.?\\xc5|\\xc6.?.?.?.?.?.?.?.?\\xc6|\\xc7.?.?.?.?.?.?.?.?\\xc7|\\xc8.?.?.?.?.?.?.?.?\\xc8|\\xc9.?.?.?.?.?.?.?.?\\xc9|\\xca.?.?.?.?.?.?.?.?\\xca|\\xcb.?.?.?.?.?.?.?.?\\xcb|\\xcc.?.?.?.?.?.?.?.?\\xcc|\\xcd.?.?.?.?.?.?.?.?\\xcd|\\xce.?.?.?.?.?.?.?.?\\xce|\\xcf.?.?.?.?.?.?.?.?\\xcf|\\xd0.?.?.?.?.?.?.?.?\\xd0|\\xd1.?.?.?.?.?.?.?.?\\xd1|\\xd2.?.?.?.?.?.?.?.?\\xd2|\\xd3.?.?.?.?.?.?.?.?\\xd3|\\xd4.?.?.?.?.?.?.?.?\\xd4|\\xd5.?.?.?.?.?.?.?.?\\xd5\
+|\\xd6.?.?.?.?.?.?.?.?\\xd6|\\xd7.?.?.?.?.?.?.?.?\\xd7|\\xd8.?.?.?.?.?.?.?.?\\xd8|\\xd9.?.?.?.?.?.?.?.?\\xd9|\\xda.?.?.?.?.?.?.?.?\\xda|\\xdb.?.?.?.?.?.?.?.?\\xdb|\\xdc.?.?.?.?.?.?.?.?\\xdc|\\xdd.?.?.?.?.?.?.?.?\\xdd|\\xde.?.?.?.?.?.?.?.?\\xde|\\xdf.?.?.?.?.?.?.?.?\\xdf|\\xe0.?.?.?.?.?.?.?.?\\xe0|\\xe1.?.?.?.?.?.?.?.?\\xe1|\\xe2.?.?.?.?.?.?.?.?\\xe2|\\xe3.?.?.?.?.?.?.?.?\\xe3|\\xe4.?.?.?.?.?.?.?.?\\xe4|\\xe5.?.?.?.?.?.?.?.?\\xe5|\\xe6.?.?.?.?.?.?.?.?\\xe6|\\xe7.?.?.?.?.?.?.?.?\\xe7|\\xe8.?.?.?.?.?.?.?.?\\xe8|\\xe9.?.?.?.?.?.?.?.?\\xe9\
+|\\xea.?.?.?.?.?.?.?.?\\xea|\\xeb.?.?.?.?.?.?.?.?\\xeb|\\xec.?.?.?.?.?.?.?.?\\xec|\\xed.?.?.?.?.?.?.?.?\\xed|\\xee.?.?.?.?.?.?.?.?\\xee|\\xef.?.?.?.?.?.?.?.?\\xef|\\xf0.?.?.?.?.?.?.?.?\\xf0|\\xf1.?.?.?.?.?.?.?.?\\xf1|\\xf2.?.?.?.?.?.?.?.?\\xf2|\\xf3.?.?.?.?.?.?.?.?\\xf3|\\xf4.?.?.?.?.?.?.?.?\\xf4|\\xf5.?.?.?.?.?.?.?.?\\xf5|\\xf6.?.?.?.?.?.?.?.?\\xf6|\\xf7.?.?.?.?.?.?.?.?\\xf7|\\xf8.?.?.?.?.?.?.?.?\\xf8|\\xf9.?.?.?.?.?.?.?.?\\xf9|\\xfa.?.?.?.?.?.?.?.?\\xfa|\\xfb.?.?.?.?.?.?.?.?\\xfb|\\xfc.?.?.?.?.?.?.?.?\\xfc|\\xfd.?.?.?.?.?.?.?.?\\xfd\
+|\\xfe.?.?.?.?.?.?.?.?\\xfe|\\xff.?.?.?.?.?.?.?.?\\xff)", 10, 5},
+*/
+		//{"fasttrack", "^get (/.download/[ -~]*|/.supernode[ -~]|/.status[ -~]|/.network[ -~]*|/.files|/.hash=[0-9a-f]*/[ -~]*) http/1.1|user-agent: kazaa|x-kazaa(-username|-network|-ip|-supernodeip|-xferid|-xferuid|tag)|^give [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]?[0-9]?[0-9]?", 40},
+    //{"gnutella", "^(gnd[\\x01\\x02]?.?.?\\x01|gnutella connect/[012]\\.[0-9]\\x0d\\x0a|get /uri-res/n2r\\?urn:sha1:|get /.*user-agent: (gtk-gnutella|bearshare|mactella|gnucleus|gnotella|limewire|imesh)|get /.*content-type: application/x-gnutella-packets|giv [0-9]*:[0-9a-f]*/|queue [0-9a-f]* [1-9][0-9]?[0-9]?\\.[1-9][0-9]?[0-9]?\\.[1-9][0-9]?[0-9]?\\.[1-9][0-9]?[0-9]?:[1-9][0-9]?[0-9]?[0-9]?|gnutella.*content-type: application/x-gnutella|...................?lime)", 40},
+    //{"http", "http/(0\\.9|1\\.0|1\\.1) [1-5][0-9][0-9]|post [\\x09-\\x0d -~* http/[01]\\.[019]", 20},
+    //{"msnmessenger", 9, 0, "ver [0-9]+ msnp[1-9][0-9]? [\\x09-\\x0d -~]*cvr0\\x0d\\x0a$|usr 1 [!-~]+ [0-9. ]+\\x0d\\x0a$|ans 1 [!-~]+ [0-9. ]+\\x0d\\x0a$"},
+    //{"xunlei", 10, 0, "^[()]...?.?.?(reg|get|query)"},
+    //{"ares", 11, 0, "^\\x03[]Z].?.?\\x05$"},
+};
+#endif
+
+/*
+static int modify_prio(struct sk_buff *skb, int apps_prio)
+{
+    int pkt_prio;
+		pkt_prio = (int *)skb->nfmark;
+    //printk("ori skb mark = %u need to set =%d\n",pkt_prio,apps_prio);
+
+    if (apps_prio < pkt_prio || pkt_prio == 0)
+    {
+		skb->nfmark = apps_prio;
+		//printk("modify skb mark = %u\n",skb->nfmark);
+    }
+    return 0;
+}
+*/
+
+static struct pattern_cache {
+	char * regex_string;
+	regexp * pattern;
+	struct pattern_cache * next;
+} * first_pattern_cache = NULL;
+
+/* I'm new to locking.  Here are my assumptions:
+
+- No one will write to /proc/net/layer7_numpackets over and over very fast; 
+  if they did, nothing awful would happen.
+
+- This code will never be processing the same packet twice at the same time,
+  because iptables rules are traversed in order.
+
+- It doesn't matter if two packets from different connections are in here at 
+  the same time, because they don't share any data.
+
+- It _does_ matter if two packets from the same connection are here at the same
+  time.  In this case, we have to protect the conntracks and the list of 
+  compiled patterns.
+*/
+DEFINE_RWLOCK(ct_lock);
+DEFINE_SPINLOCK(list_lock);
+
+#ifdef CONFIG_IP_NF_MATCH_LAYER7_DEBUG
+/* Converts an unfriendly string into a friendly one by 
+replacing unprintables with periods and all whitespace with " ". */
+static char * friendly_print(unsigned char * s)
+{
+	char * f = kmalloc(strlen(s) + 1, GFP_ATOMIC);
+	int i;
+
+	if(!f) {
+		if (net_ratelimit()) 
+			printk(KERN_ERR "layer7: out of memory in friendly_print, bailing.\n");
+		return NULL;
+	}
+
+	for(i = 0; i < strlen(s); i++){
+		if(isprint(s[i]) && s[i] < 128)	f[i] = s[i];
+		else if(isspace(s[i]))		f[i] = ' ';
+		else 				f[i] = '.';
+	}
+	f[i] = '\0';
+	return f;
+}
+
+static char dec2hex(int i)
+{
+	switch (i) {
+		case 0 ... 9:
+			return (char)(i + '0');
+			break;
+		case 10 ... 15:
+			return (char)(i - 10 + 'a');
+			break;
+		default:
+			if (net_ratelimit()) 
+				printk("Problem in dec2hex\n");
+			return '\0';
+	}
+}
+
+static char * hex_print(unsigned char * s)
+{
+	char * g = kmalloc(strlen(s)*3 + 1, GFP_ATOMIC);
+	int i;
+
+	if(!g) {
+	       if (net_ratelimit()) 
+			printk(KERN_ERR "layer7: out of memory in hex_print, bailing.\n");
+	       return NULL;
+	}
+
+	for(i = 0; i < strlen(s); i++) {
+		g[i*3    ] = dec2hex(s[i]/16);
+		g[i*3 + 1] = dec2hex(s[i]%16);
+		g[i*3 + 2] = ' ';
+	}
+	g[i*3] = '\0';
+
+	return g;
+}
+#endif // DEBUG
+
+static int pisxdigit(char c)
+{
+    if ((c >= '0' && c <= '9')
+        || (c >= 'a' && c <= 'f')
+        || (c >= 'A' && c <= 'F'))
+        return 1;
+    else
+        return 0;
+}
+
+static char ptolower(char c)
+{
+    if (c >= 'A' && c <= 'Z')
+        c += 0x20;
+    return c;
+}
+
+static int hex2dec(char c)
+{
+    switch (c)
+    {
+        case '0' ... '9':
+            return c - '0';
+        case 'a' ... 'f':
+            return c - 'a' + 10;
+        case 'A' ... 'F':
+            return c - 'A' + 10;
+        default:
+            return 0;
+    }
+}
+
+int pre_process(char *str_out, char *str_in, int str_out_len)
+{
+    char *result = str_out;
+    char *s = str_in;
+    int sindex = 0, rindex = 0;
+    
+    while ( sindex < strlen(s) && (rindex + 1 < str_out_len))
+    {
+        if ( sindex + 3 < strlen(s) &&
+            s[sindex] == '\\' && s[sindex+1] == 'x' && 
+            pisxdigit(s[sindex + 2]) && pisxdigit(s[sindex + 3]) ) 
+        {
+            /* carefully remember to call tolower here... */
+            result[rindex] = ptolower( hex2dec(s[sindex + 2])*16 +
+                                      hex2dec(s[sindex + 3] ) );
+            sindex += 3; /* 4 total */
+        }
+        else
+            result[rindex] = ptolower(s[sindex]);
+
+        sindex++; 
+        rindex++;
+    }
+    result[rindex] = '\0';
+    
+    if (rindex > 0)
+        return 0;
+    else
+        return 1;
+}
+
+/* Use instead of regcomp.  As we expect to be seeing the same regexps over and
+over again, it make sense to cache the results. */
+int compile_and_cache(void) 
+{
+	struct ipt_layer7_info * info = (struct ipt_layer7_info *)matchinfo;
+	struct pattern_cache * node               = first_pattern_cache;
+	//struct pattern_cache * last_pattern_cache = first_pattern_cache;
+	struct pattern_cache * tmp;
+	unsigned int len;
+	unsigned int num_proto = sizeof(matchinfo)/sizeof(struct ipt_layer7_info);
+	int i;
+	
+	for (i=0; i<num_proto; i++){
+		
+		if (pre_process(g_app_data, info[i].pattern, sizeof(g_app_data)) != 0)
+            continue;
+		/* If we reach the end of the list, then we have not yet cached
+		   the pattern for this regex. Let's do that now. 
+		   Be paranoid about running out of memory to avoid list corruption. */
+		tmp = kmalloc(sizeof(struct pattern_cache), GFP_ATOMIC);
+	
+		if(!tmp) {
+			if (net_ratelimit()) 
+				printk(KERN_ERR "layer7: out of memory in compile_and_cache, bailing.\n");
+			return 0;
+		}
+	
+		tmp->regex_string  = kmalloc(strlen(g_app_data) + 1, GFP_ATOMIC);
+		if (NULL == tmp->regex_string)
+		{
+			if (net_ratelimit()) 
+				printk(KERN_ERR "layer7: out of memory in compile_and_cache, bailing.\n");
+			kfree(tmp);
+			return 0;
+		}
+        
+		tmp->pattern        = regcomp(g_app_data, &len);
+		if (tmp->pattern == NULL)
+		{
+			if (net_ratelimit()) 
+				printk(KERN_ERR "layer7: out of memory in compile_and_cache, bailing.\n");
+			kfree(tmp->regex_string);
+			kfree(tmp);
+			return 0;
+		}
+		strcpy(tmp->regex_string, g_app_data);
+		tmp->next           = NULL;
+        
+		if (node == NULL)
+		{
+			node = tmp;
+			first_pattern_cache = tmp;
+		}
+		else
+		{
+			node->next = tmp;
+			node = tmp;
+		}
+		DPRINTK("About to compile this: \"%s\"\n", node->regex_string);
+	}
+	return 1;
+}
+
+static int can_handle(const struct sk_buff *skb)
+{
+	if(!skb->nh.iph) /* not IP */
+		return 0;
+	if(skb->nh.iph->protocol != IPPROTO_TCP &&
+	   skb->nh.iph->protocol != IPPROTO_UDP &&
+	   skb->nh.iph->protocol != IPPROTO_ICMP)
+		return 0;
+	return 1;
+}
+
+/* Returns offset the into the skb->data that the application data starts */
+static int app_data_offset(const struct sk_buff *skb)
+{
+	/* In case we are ported somewhere (ebtables?) where skb->nh.iph 
+	isn't set, this can be gotten from 4*(skb->data[0] & 0x0f) as well. */
+	int ip_hl = 4*skb->nh.iph->ihl;
+
+	if( skb->nh.iph->protocol == IPPROTO_TCP ) {
+		/* 12 == offset into TCP header for the header length field. 
+		Can't get this with skb->h.th->doff because the tcphdr 
+		struct doesn't get set when routing (this is confirmed to be 
+		true in Netfilter as well as QoS.) */
+		int tcp_hl = 4*(skb->data[ip_hl + 12] >> 4);
+
+		return ip_hl + tcp_hl;
+	} else if( skb->nh.iph->protocol == IPPROTO_UDP  ) {
+		return ip_hl + 8; /* UDP header is always 8 bytes */
+	} else if( skb->nh.iph->protocol == IPPROTO_ICMP ) {
+		return ip_hl + 8; /* ICMP header is 8 bytes */
+	} else {
+		if (net_ratelimit()) 
+			printk(KERN_ERR "layer7: tried to handle unknown protocol!\n");
+		return ip_hl + 8; /* something reasonable */
+	}
+}
+
+/* handles whether there's a match when we aren't appending data anymore */
+static int match_no_append(struct ip_conntrack * conntrack, struct ip_conntrack * master_conntrack,
+			enum ip_conntrack_info ctinfo, enum ip_conntrack_info master_ctinfo,
+			char* matchinfo_proto)
+{
+	/* If we're in here, throw the app data away */
+	write_lock(&ct_lock);
+	if(master_conntrack->layer7.app_data != NULL) {
+
+	#ifdef CONFIG_IP_NF_MATCH_LAYER7_DEBUG
+		if(!master_conntrack->layer7.app_proto) {
+			char * f = friendly_print(master_conntrack->layer7.app_data);
+			char * g = hex_print(master_conntrack->layer7.app_data);
+			DPRINTK("\nl7-filter gave up after %d bytes (%d packets):\n%s\n", 
+				strlen(f), TOTAL_PACKETS, f);
+			kfree(f); 
+			DPRINTK("In hex: %s\n", g);
+			kfree(g);
+		}
+	#endif
+
+		kfree(master_conntrack->layer7.app_data);
+		master_conntrack->layer7.app_data = NULL; /* don't free again */
+	}
+	write_unlock(&ct_lock);
+
+	if(master_conntrack->layer7.app_proto){
+		/* Here child connections set their .app_proto (for /proc/net/ip_conntrack) */
+		write_lock(&ct_lock);
+		if(!conntrack->layer7.app_proto) {
+			conntrack->layer7.app_proto = kmalloc(strlen(master_conntrack->layer7.app_proto)+1, GFP_ATOMIC);
+			if(!conntrack->layer7.app_proto){
+				if (net_ratelimit()) 
+					printk(KERN_ERR "layer7: out of memory in match_no_append, bailing.\n");
+				write_unlock(&ct_lock);
+				return 1;
+			}
+			strcpy(conntrack->layer7.app_proto, master_conntrack->layer7.app_proto);
+		}
+		write_unlock(&ct_lock);
+		return (!strcmp(master_conntrack->layer7.app_proto, matchinfo_proto));
+	}
+	else {
+		/* If not classified, set to "unknown" to distinguish from 
+		connections that are still being tested. */
+		write_lock(&ct_lock);
+		master_conntrack->layer7.app_proto = kmalloc(strlen("unknown")+1, GFP_ATOMIC);
+		if(!master_conntrack->layer7.app_proto){
+			if (net_ratelimit()) 
+				printk(KERN_ERR "layer7: out of memory in match_no_append, bailing.\n");
+			write_unlock(&ct_lock);
+			return 1;
+		}
+		strcpy(master_conntrack->layer7.app_proto, "unknown");
+		write_unlock(&ct_lock);
+		return 0;
+	}
+}
+
+static int scan_all(char *packet_data)
+{
+	struct pattern_cache * node               = first_pattern_cache;
+  int i = 0;
+	
+	while (node != NULL)
+	{
+		if (regexec(node->pattern, packet_data))
+		{
+			return i;
+		}   
+		i++;
+		node = node->next;
+	}
+  return -1;//dismatch
+}
+
+/* add the new app data to the conntrack.  Return number of bytes added. */
+static int add_data(struct ip_conntrack * master_conntrack, 
+			char * app_data, int appdatalen)
+{
+	int length = 0, i;
+	int oldlength = master_conntrack->layer7.app_data_len;
+	/* Strip nulls. Make everything lower case (our regex lib doesn't
+	do case insensitivity).  Add it to the end of the current data. */
+	for(i = 0; i < maxdatalen-oldlength-1 && i < appdatalen; i++) {
+		if(app_data[i] != '\0') {
+			master_conntrack->layer7.app_data[length+oldlength] = 
+				/* the kernel version of tolower mungs 'upper ascii' */
+				isascii(app_data[i])? tolower(app_data[i]) : app_data[i];
+			length++;
+		}
+	}
+
+	master_conntrack->layer7.app_data[length+oldlength] = '\0';
+	master_conntrack->layer7.app_data_len = length + oldlength;
+
+	return length;
+}
+
+/*static int match(struct sk_buff *skb, const struct net_device *in,
+		 const struct net_device *out, const void *matchinfo,
+		 int offset,		   int *hotdrop)
+*/
+static int l7_filter_main(struct sk_buff *skb, int flag)
+{
+	struct ipt_layer7_info * info = (struct ipt_layer7_info *)matchinfo;
+	struct ip_conntrack *master_conntrack, *conntrack;
+	enum ip_conntrack_info master_ctinfo, ctinfo;
+	unsigned char * app_data;  
+	unsigned int pattern_result, appdatalen;
+	unsigned int num_proto = sizeof(matchinfo)/sizeof(struct ipt_layer7_info);
+	struct iphdr *iph;
+	iph=(void *) skb->nh.iph;
+	int i = 0, j = 0;
+
+	if(is_init){
+		compile_and_cache();
+		is_init=0;
+	}
+		
+	if (skb==NULL){
+  	return L7_ERROR;
+	}
+	
+	/*traffic comes from GUI mapping port nember, no need to filter*/
+	if (skb->nfmark)
+		return L7_SUCCESS;
+		
+	if(!can_handle(skb)){
+		DPRINTK("layer7: This is some protocol I can't handle.\n");
+		return L7_SUCCESS;
+	}
+
+	/* Treat the parent and all its children together as one connection, 
+	except for the purpose of setting conntrack->layer7.app_proto in the 
+	actual connection. This makes /proc/net/ip_conntrack somewhat more 
+	satisfying. */
+	if(!(conntrack = ip_conntrack_get((struct sk_buff *)skb, &ctinfo)) ||
+	   !(master_conntrack = ip_conntrack_get((struct sk_buff *)skb, &master_ctinfo))) {
+		DPRINTK("layer7: packet is not from a known connection, giving up.\n");
+		return L7_SUCCESS;
+	}
+	/* Try to get a master conntrack (and its master etc) for FTP, etc. */
+	while (master_ct(master_conntrack) != NULL)
+		master_conntrack = master_ct(master_conntrack);
+
+/*	if(!skb->cb[17]){
+		write_lock(&ct_lock);
+		master_conntrack->layer7.numpackets++; //starts at 0 via memset
+		write_unlock(&ct_lock);
+	}
+*/
+	/* if we've classified it or seen too many packets */
+	if(TOTAL_PACKETS > num_packets || 
+	   master_conntrack->layer7.app_proto) {
+	  skb->cb[17] = 1; /* marking it seen here is probably irrelevant, but consistant */ 	
+		for (i=0; i<num_proto; i++){
+			pattern_result = match_no_append(conntrack, master_conntrack, ctinfo, master_ctinfo, info[i].protocol);
+			/* skb->cb[17] == seen. Avoid doing things twice if there are two l7 
+			rules. I'm not sure that using cb for this purpose is correct, although
+			it says "put your private variables there". But it doesn't look like it
+			is being used for anything else in the skbs that make it here. How can
+			I write to cb without making the compiler angry? */
+			//printk("1:match: return %d\n",pattern_result?1:0);
+			if(pattern_result){
+				//printk("match 1 !!!\n");
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+				if (info[i].p2p_flag)
+				{
+					if ((conntrack->status & IPS_P2P_SESSION) != IPS_P2P_SESSION)
+					{
+						conntrack->status |= IPS_P2P_SESSION;
+						p2p_session_count++;
+						if (p2p_session_count >= p2p_session_max)
+						{
+							atomic_inc(&conntrack->ct_general.use);
+							call_death_by_timeout(conntrack);
+
+							return L7_ERROR;
+						}
+					}
+				}
+#endif
+				if(su_ip){
+					if(su_ip == iph->saddr || su_ip == iph->daddr)
+					{
+						skb->nfmark = info[i].su_prio;
+					}else
+						skb->nfmark = info[i].prio;
+				}else
+					skb->nfmark = info[i].prio;
+				return L7_SUCCESS;
+			}
+		}
+		return L7_SUCCESS;
+	}
+
+	if(skb_is_nonlinear(skb)){
+		if(skb_linearize(skb, GFP_ATOMIC) != 0){
+			if (net_ratelimit()) 
+				printk(KERN_ERR "layer7: failed to linearize packet, bailing.\n");
+			return L7_SUCCESS;
+		}
+	}
+	
+	/* now that the skb is linearized, it's safe to set these. */
+	app_data = skb->data + app_data_offset(skb);
+	appdatalen = skb->tail - app_data;
+	
+	/* On the first packet of a connection, allocate space for app data */
+	write_lock(&ct_lock);
+	if(TOTAL_PACKETS == 1 && !skb->cb[17] && !master_conntrack->layer7.app_data) {
+		master_conntrack->layer7.app_data = kmalloc(maxdatalen, GFP_ATOMIC);
+		if(!master_conntrack->layer7.app_data){
+			if (net_ratelimit())
+				printk(KERN_ERR "layer7: out of memory in match, bailing.\n");
+			write_unlock(&ct_lock);
+			return L7_SUCCESS;
+		}
+		master_conntrack->layer7.app_data[0] = '\0';
+	}
+	write_unlock(&ct_lock);
+
+	/* Can be here, but unallocated, if numpackets is increased near 
+	the beginning of a connection */
+	if(master_conntrack->layer7.app_data == NULL){
+		return L7_SUCCESS;
+	}
+	
+	if(!skb->cb[17]){
+		int newbytes;
+		write_lock(&ct_lock);
+		newbytes = add_data(master_conntrack, app_data, appdatalen);
+		write_unlock(&ct_lock);
+
+		if(newbytes == 0) { // didn't add any data
+			skb->cb[17] = 1;
+			// Didn't match before, not going to match now
+			return L7_SUCCESS;
+		}
+	}
+	
+	/* If the regexp failed to compile, don't bother running it */
+	j = scan_all(master_conntrack->layer7.app_data);
+	if(j != -1) {
+		DPRINTK("layer7: regexec positive: %s!\n", info[j].protocol);
+		pattern_result = 1;
+	} else pattern_result = 0;
+	
+	if(pattern_result) {
+		write_lock(&ct_lock);
+		master_conntrack->layer7.app_proto = kmalloc(strlen(info[j].protocol)+1, GFP_ATOMIC);
+	if(!master_conntrack->layer7.app_proto){
+		if (net_ratelimit()) 
+			printk(KERN_ERR "layer7: out of memory in match, bailing.\n");
+			write_unlock(&ct_lock);
+			return L7_SUCCESS;
+		}
+		strcpy(master_conntrack->layer7.app_proto, info[j].protocol);
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+		if (info[j].p2p_flag)
+		{
+			master_conntrack->status |= IPS_P2P_SESSION;
+			p2p_session_count++;
+			if (p2p_session_count >= p2p_session_max)
+			{
+				atomic_inc(&master_conntrack->ct_general.use);
+				call_death_by_timeout(master_conntrack);
+
+				skb->cb[17] = 1;
+				write_unlock(&ct_lock);
+				return L7_ERROR;
+			}
+		}
+#endif
+		write_unlock(&ct_lock);
+	}
+	/* mark the packet seen */
+	skb->cb[17] = 1;
+	if(pattern_result){
+		//printk("match 2 !!!\n");
+		if(su_ip){
+			if(su_ip == iph->saddr || su_ip == iph->daddr)
+			{
+				skb->nfmark = info[i].su_prio;
+			}else
+				skb->nfmark = info[i].prio;
+		}else
+			skb->nfmark = info[i].prio;
+		return L7_SUCCESS;
+	}
+	return L7_SUCCESS;
+}
+
+/*static int checkentry(const char *tablename, const struct ipt_ip *ip,
+	   void *matchinfo, unsigned int matchsize, unsigned int hook_mask)
+{
+	if (matchsize != IPT_ALIGN(sizeof(struct ipt_layer7_info))) 
+		return 0;
+	return 1;
+}
+
+static struct ipt_match layer7_match = { 
+	.name = "layer7", 
+	.match = &match, 
+	.checkentry = &checkentry, 
+	.me = THIS_MODULE,
+};*/
+
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+static int p2p_sess_max_read_proc(char* page, char ** start, off_t off, int count, 
+		     int* eof, void * data) 
+{
+	int p2p_count = p2p_session_count;
+	printk("max p2p session num : %d\n", p2p_session_max);
+	printk("current p2p session num : %d\n", p2p_count);
+	return 0;
+}
+
+/* Read in num_packets from userland */
+static int p2p_sess_max_write_proc(struct file* file, const char* buffer, 
+		      unsigned long count, void *data) 
+{
+	char * foo = kmalloc(count, GFP_ATOMIC);
+
+	if(!foo){
+		if (net_ratelimit()) 
+			printk("p2p_sess_max_write_proc : no memory...\n");
+		return count;
+	}
+	copy_from_user(foo, buffer, count);
+
+	p2p_session_max = simple_strtol(foo, NULL, 0);
+
+	kfree(foo);
+	
+	return count;
+}
+#endif
+
+static int qos_write_proc(struct file *file, const char *buffer,
+		      unsigned long count, void *data)
+{
+      if (count < 2 || count > 3) 
+	    return -EFAULT;
+      
+      if (buffer && !copy_from_user(&gQosSetting, buffer, count)) {
+          gQosSetting[count-1] = 0; // remove 0x0a
+          if (gQosSetting[0] == '0')
+                gQosEnabled = 0;
+          else
+                gQosEnabled = 1;
+
+
+	    return count;
+      }
+      return -EFAULT;
+}
+
+static int qos_read_proc(char *page, char **start, off_t off,
+		     int count, int *eof, void *data)
+{
+      int len;
+
+      len = sprintf(page, "%s\n", gQosSetting);
+
+      if (len <= off+count) *eof = 1;
+      *start = page + off;
+      len -= off;
+      if (len>count) len = count;
+      if (len<0) len = 0;
+      return len;
+}
+
+/* taken from drivers/video/modedb.c */
+static int my_atoi(const char *s)
+{
+	int val = 0;
+
+	for (;; s++) {
+		switch (*s) {
+			case '0'...'9':
+			val = 10*val+(*s-'0');
+			break;
+		default:
+			return val;
+		}
+	}
+}
+
+/* write out num_packets to userland. */
+static int layer7_read_proc(char* page, char ** start, off_t off, int count, 
+		     int* eof, void * data) 
+{
+	if(num_packets > 99 && net_ratelimit()) 
+		printk(KERN_ERR "layer7: NOT REACHED. num_packets too big\n");
+	
+	page[0] = num_packets/10 + '0';
+	page[1] = num_packets%10 + '0';
+	page[2] = '\n';
+	page[3] = '\0';
+		
+	*eof=1;
+
+	return 3;
+}
+
+/* Read in num_packets from userland */
+static int layer7_write_proc(struct file* file, const char* buffer, 
+		      unsigned long count, void *data) 
+{
+	char * foo = kmalloc(count, GFP_ATOMIC);
+
+	if(!foo){
+		if (net_ratelimit()) 
+			printk(KERN_ERR "layer7: out of memory, bailing. num_packets unchanged.\n");
+		return count;
+	}
+
+	if(copy_from_user(foo, buffer, count)) {
+		return -EFAULT;
+	}
+	
+
+	num_packets = my_atoi(foo);
+	kfree (foo);
+
+	/* This has an arbitrary limit to make the math easier. I'm lazy. 
+	But anyway, 99 is a LOT! If you want more, you're doing it wrong! */
+	if(num_packets > 99) {
+		printk(KERN_WARNING "layer7: num_packets can't be > 99.\n");
+		num_packets = 99;
+	} else if(num_packets < 1) {
+		printk(KERN_WARNING "layer7: num_packets can't be < 1.\n");
+		num_packets = 1;
+	}
+	
+	return count;
+}
+
+static int read_qos_su (char *page, char **start, off_t off,
+		     int count, int *eof, void *data)
+{
+	int len;
+	if (su_ip)
+		len = sprintf(page, "%u.%u.%u.%u\n", NIPQUAD(su_ip));
+	else
+		len = sprintf(page, "No su ip\n");
+	if (len <= off+count) 
+		*eof = 1;
+	*start = page + off;
+	len -= off;
+	if (len>count)
+		len = count;
+	if (len<0) 
+		len = 0;
+	return len;
+	
+}
+
+static int write_qos_su (struct file *file, const char *buffer,
+		      unsigned long count, void *data)
+{
+	char tmp[16];
+	unsigned int ip1, ip2, ip3, ip4;
+	if (buffer && !copy_from_user(&tmp, buffer, count)) 
+	{
+		// to avoid string operation fail and limit the sting length under 16 , force to set last byte or byte 16 to \0
+		if (count >=15)
+			tmp[15] = 0; 
+		else
+			tmp[count] = 0;
+		if (tmp[0] == '0') // clean su_ip address
+		{
+			su_ip = 0;
+			return count;
+		}
+		
+		sscanf(tmp,"%u.%u.%u.%u", &ip1, &ip2, &ip3, &ip4);
+		if ( (ip1 > 255) || (ip2 > 255) || (ip3 > 255) || (ip4 > 255))
+			return -EFAULT;
+		su_ip = (ip1 << 24 | ip2 << 16 | ip3 << 8 | ip4);
+	}
+	return -EFAULT;
+	
+}
+
+/* register the proc file */
+static void layer7_init_proc(void)
+{
+	struct proc_dir_entry *entry1, *entry2, *entry3, *entry4;
+	entry1 = create_proc_entry("qos", 0, NULL);
+	entry1->read_proc = qos_read_proc;
+	entry1->write_proc = qos_write_proc;
+	
+	entry2 = create_proc_entry("layer7_numpackets", 0644, proc_net);
+	entry2->read_proc = layer7_read_proc;
+	entry2->write_proc = layer7_write_proc;
+	
+	entry3 = create_proc_entry("qos_su_ip", 0, NULL);
+	entry3->read_proc = read_qos_su;
+	entry3->write_proc = write_qos_su;
+	
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION	
+	entry4 = create_proc_entry("p2p_session_max", 0, NULL);
+	entry4->read_proc = p2p_sess_max_read_proc;
+	entry4->write_proc = p2p_sess_max_write_proc;
+#endif
+}
+
+static void layer7_cleanup_proc(void)
+{
+	remove_proc_entry("qos", NULL);
+	remove_proc_entry("layer7_numpackets", proc_net);
+	remove_proc_entry("qos_su_ip", NULL);
+#ifdef CONFIG_DNI_LIMIT_P2P_SESSION
+	remove_proc_entry("p2p_session_max", NULL);
+#endif
+}
+
+static int __init init(void)
+{
+	layer7_init_proc();
+	if(maxdatalen < 1) {
+		printk(KERN_WARNING "layer7: maxdatalen can't be < 1, using 1\n");
+		maxdatalen = 1;
+	}
+	/* This is not a hard limit.  It's just here to prevent people from 
+	bringing their slow machines to a grinding halt. */
+	else if(maxdatalen > 65536) {
+		printk(KERN_WARNING "layer7: maxdatalen can't be > 65536, using 65536\n");
+		maxdatalen = 65536;             
+	}	
+	//return ipt_register_match(&layer7_match);
+	qos_layer7_hook=l7_filter_main;
+	return 0;
+}
+
+static void __exit fini(void)
+{
+	layer7_cleanup_proc();
+	//ipt_unregister_match(&layer7_match);
+	qos_layer7_hook = NULL;
+}
+
+module_init(init);
+module_exit(fini);
+//EXPORT_SYMBOL(gQosEnabled);
+//EXPORT_SYMBOL(l7_filter_main);

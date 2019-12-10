@@ -1,0 +1,18 @@
+debian/tmp/usr/share/man/*
+debian/tmp/usr/bin/*
+debian/tmp/usr/sbin/atmsigd
+debian/tmp/usr/sbin/atmaddr
+debian/tmp/usr/sbin/esi
+debian/tmp/usr/sbin/atmloop
+debian/tmp/usr/sbin/atmtcp
+debian/tmp/usr/sbin/enitune
+debian/tmp/usr/sbin/zntune
+debian/tmp/usr/sbin/atmarp sbin
+debian/tmp/usr/sbin/atmarpd sbin
+debian/tmp/usr/sbin/ilmid
+debian/tmp/usr/sbin/zeppelin
+debian/tmp/usr/sbin/les
+debian/tmp/usr/sbin/bus
+debian/tmp/usr/sbin/lecs
+debian/tmp/usr/sbin/mpcd
+debian/tmp/etc/atmsigd.conf

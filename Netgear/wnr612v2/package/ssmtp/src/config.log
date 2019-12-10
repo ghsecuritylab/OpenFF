@@ -1,0 +1,28 @@
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:540: checking for gcc
+configure:653: checking whether the C compiler (mips-linux-uclibc-gcc -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time   ) works
+configure:669: mips-linux-uclibc-gcc -o conftest -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time   -I. -I/home/dvdchen/WNR612/project/tmp/wnr612_1003_102_GPL/build_mips/matrixssl/matrixssl  conftest.c  1>&5
+configure:695: checking whether the C compiler (mips-linux-uclibc-gcc -Os -pipe -mips32 -mtune=mips32 -funit-at-a-time   ) is a cross-compiler
+configure:700: checking whether we are using GNU C
+configure:728: checking whether mips-linux-uclibc-gcc accepts -g
+configure:790: checking for a BSD compatible install
+configure:843: checking whether ln -s works
+configure:866: checking how to run the C preprocessor
+configure:946: checking for ANSI C header files
+configure:1053: checking for limits.h
+configure:1053: checking for strings.h
+configure:1053: checking for syslog.h
+configure:1053: checking for unistd.h
+configure:1092: checking for obsolete openlog
+configure:1121: checking for working const
+configure:1196: checking whether struct tm is in sys/time.h or time.h
+configure:1231: checking for gethostname in -lnsl
+configure:1278: checking for socket in -lsocket
+configure:1326: checking return type of signal handlers
+configure:1367: checking for vprintf
+configure:1474: checking for gethostname
+configure:1474: checking for socket
+configure:1474: checking for strdup
+configure:1474: checking for strstr

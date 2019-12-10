@@ -1,0 +1,14 @@
+#
+# For a description of the syntax of this configuration file,
+# see scripts/kbuild/config-language.txt.
+#
+
+menu "Atheros Communications flash_mac utility"
+
+config BUSYBOX_CONFIG_FLASH_MAC
+	bool "flash_mac"
+	default n
+	help
+	 Atheros flash_mac function 
+
+endmenu

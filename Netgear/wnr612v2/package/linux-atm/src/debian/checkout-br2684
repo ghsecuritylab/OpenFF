@@ -1,0 +1,25 @@
+#!/bin/bash -x
+
+set -e
+
+# check out br2684 from upstream CVS. We need to jump through hoops if
+# the local source package is under cvs control as well.
+
+CVSDIR=":pserver:anonymous:@cvs.linux-atm.sourceforge.net.:/cvsroot/linux-atm"
+DIR="br2684"
+TMPDIR="/tmp"
+TARGETDIR="src"
+
+cvs -d${CVSDIR} login
+
+mkdir -p $TMPDIR
+pushd $TMPDIR
+cvs -z6 -d${CVSDIR} export -d $DIR -r V2_5_0 linux-atm/src/br2684
+
+popd
+
+mv $TMPDIR/$DIR/* $TARGETDIR/$DIR
+rm -rf $TMPDIR/$DIR
+
+autoreconf -i -f
+

@@ -1,0 +1,105 @@
+//Section for Advance initial:
+[advance]
+TIME
+// this system will prompt '#' as response
+PROMPT='#'
+cat /proc/version
+cat /proc/uptime
+ps
+cat /firmware_version
+cat /proc/stat
+cat /proc/modules
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/cmdline
+cat /proc/iomem
+cat /proc/mounts
+cat /proc/cpuinfo
+nvram show
+DELAY=2
+
+cat /proc/kmsg &
+cat /proc/net/arp
+cat /proc/net/tcp
+cat /proc/net/udp
+cat /proc/net/packet
+cat /proc/net/unix
+cat /proc/net/raw
+ifconfig
+
+cat /proc/meminfo
+cat /proc/slabinfo
+ls -al /tmp
+cat /tmp/resolv.conf
+
+//Section for System periodical log:
+// continue display system tasks, interrupt, modules, and memory
+REPEAT_BEGIN
+TIME
+ps
+cat /firmware_version
+cat /proc/stat
+cat /proc/modules
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/interrupts
+cat /proc/cmdline
+cat /proc/iomem
+cat /proc/mounts
+cat /proc/cpuinfo
+nvram show
+DELAY=2
+
+cat /proc/kmsg
+cat /proc/net/arp
+cat /proc/net/tcp
+cat /proc/net/udp
+cat /proc/net/packet
+cat /proc/net/unix
+cat /proc/net/raw
+ifconfig
+
+cat /proc/meminfo
+cat /proc/slabinfo
+ls -al /tmp
+cat /tmp/resolv.conf
+
+killall -SIGUSR1 udhcpd
+cat /tmp/udhcpd.conf
+cat /tmp/udhcpd.leases
+cat /tmp/udhcpd_resrv.conf
+cat /tmp/udhcpd.pid
+ls -al /tmp/var/run
+DELAY=120
+REPEAT=2
+
+
+
+
+REPEAT_BEGIN
+TIME
+killall -SIGUSR1 udhcpd
+cat /tmp/udhcpd.conf
+cat /tmp/udhcpd.leases
+cat /tmp/udhcpd_resrv.conf
+cat /tmp/udhcpd.pid
+cat /tmp/dhcpc0.expires
+ls -al /tmp/var/run
+DELAY=120
+// repeat forever until problem occurs or manually stop
+REPEAT=10		
+
+REPEAT_BEGIN
+TIME
+cat /tmp/ppp/pppoe_session
+cat /tmp/ppp/options
+cat /tmp/ppp/pap-secrets
+cat /tmp/ppp/chap-secrets
+// display ip information
+cat /tmp/ppp/resolv.conf
+cat /tmp/ppp/link.ppp0
+cat /tmp/ppp/linkstart.ppp0
+cat /tmp/PADO
+DELAY=30
+REPEAT=12

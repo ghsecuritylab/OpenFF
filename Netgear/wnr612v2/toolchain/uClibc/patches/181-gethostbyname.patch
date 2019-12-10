@@ -1,0 +1,67 @@
+--- uClibc-0.9.28/libc/inet/resolv.c	2009-04-20 13:17:55.000000000 +0800
++++ uClibc-0.9.28/libc/inet/resolv.c.new	2009-04-20 13:24:39.000000000 +0800
+@@ -263,7 +263,7 @@
+ extern int __encode_answer(struct resolv_answer * a,
+ 	unsigned char * dest, int maxlen);
+ extern int __decode_answer(unsigned char * message, int offset,
+-	struct resolv_answer * a);
++	int len, struct resolv_answer * a);
+ extern int __length_question(unsigned char * message, int offset);
+ extern int __open_nameservers(void);
+ extern void __close_nameservers(void);
+@@ -527,16 +527,22 @@
+ 
+ #ifdef L_decodea
+ int __decode_answer(unsigned char *message, int offset,
+-				  struct resolv_answer *a)
++				  int len, struct resolv_answer *a)
+ {
+ 	char temp[256];
+ 	int i;
+ 
++	DPRINTF("decode_answer(start): off %d, len %d\n", offset, len);
+ 	i = __decode_dotted(message, offset, temp, sizeof(temp));
+ 	if (i < 0)
+ 		return i;
+ 
+ 	message += offset + i;
++	len -= i + RRFIXEDSZ + offset;
++	if (len < 0) {
++		DPRINTF("decode_answer: off %d, len %d, i %d\n", offset, len, i);
++		return len;
++	}
+ 
+ 	a->dotted = strdup(temp);
+ 	a->atype = (message[0] << 8) | message[1];
+@@ -553,6 +559,8 @@
+ 
+ 	DPRINTF("i=%d,rdlength=%d\n", i, a->rdlength);
+ 
++	if (len < a->rdlength)
++		return -1;
+ 	return i + RRFIXEDSZ + a->rdlength;
+ }
+ #endif
+@@ -845,12 +853,19 @@
+ 		DPRINTF("Decoding answer at pos %d\n", pos);
+ 
+ 		first_answer = 1;
+-		for (j=0;j<h.ancount;j++,pos += i)
+-		{
+-		    i = __decode_answer(packet, pos, &ma);
++		//for (j=0;j<h.ancount;j++,pos += i)
++		//{
++		//    i = __decode_answer(packet, pos, &ma);
++
++		for (j = 0; j < h.ancount && pos < len; j++, pos += i) {
++			i = __decode_answer(packet, pos, len, &ma);
+ 
+ 		    if (i<0) {
+ 			DPRINTF("failed decode %d\n", i);
++				/* if the message was truncated and we have
++				   decoded some answers, pretend it's OK */
++				if (j && h.tc)
++					break;
+ 			goto again;
+ 		    }
+ 

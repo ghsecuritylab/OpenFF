@@ -1,0 +1,21 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+## Please make changes in /etc/firewall.user
+START=45
+start() {
+	sleep 3
+	echo "Run firewall start...."
+	/www/cgi-bin/firewall.sh start
+}
+
+stop() {
+	iptables -P INPUT ACCEPT
+	iptables -P OUTPUT ACCEPT
+	iptables -P FORWARD ACCEPT
+	iptables -F
+	iptables -t nat -P PREROUTING ACCEPT
+	iptables -t nat -P POSTROUTING ACCEPT
+	iptables -t nat -P OUTPUT ACCEPT
+	iptables -t nat -F
+}

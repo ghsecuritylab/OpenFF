@@ -1,0 +1,57 @@
+Source: linux-atm
+Section: net
+Priority: optional
+Maintainer: Peter De Schrijver (p2) <p2@mind.be>
+Build-Depends: debhelper (>> 4.0.0), bison, flex, perl, dpatch, automake1.4
+Standards-Version: 3.6.1
+
+Package: atm-tools
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Base programs for ATM in Linux, the net-tools for ATM
+ This package provides all the basic programs needed for setting up,
+ monitoring and tuning ATM networks. Such as:
+  * atmsigd, an ATM signal daemon that implements the ATM UNI protocol.
+  * atmtcp, a tool to setup ATM over TCP connections.
+  * atmarpd, an implementation of the ATMARP protocol (RFC1577, RFC1755)
+  * zeppelin, an ATM LAN Emulation client daemon
+  * les and bus, ATM LAN Emulation service daemons
+ .
+ Notice that upstream still flags these tools as experimental software and
+ says that there is still a number of known bugs and issues. The
+ software is, however, in productive use at a number of sites and is
+  working reliably.
+ .
+ Homepage: http://linux-atm.sourceforge.net/
+
+Package: atm-dev
+Depends: libatm1-dev
+Architecture: all
+Section: oldlibs
+Description: Development files for compiling ATM programs (dummy package) 
+ This dummy package provides a transition from the previous atm packages.
+ It is provided for backwards compatibility only and may be removedafter 
+ the upgrade has completed or when when no other package depend on it.
+ 
+Package: libatm1
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}
+Conflicts: atm-tools (<< 2.4.1-6)
+Description: shared library for ATM (Asynchronous Transfer Mode)
+ Shared libraries needed by ATM (Asynchronous Transfer Mode) related programs
+ .
+ Homepage: http://linux-atm.sourceforge.net/
+
+Package: libatm1-dev
+Section: libdevel
+Architecture: any
+Depends: libc6-dev, libatm1
+Replaces: atm-dev (<< 2.4.1-7)
+Conflicts: atm-dev (<< 2.4.1-7)
+Provides: libatm-dev
+Description: Development files for compiling ATM programs
+ Header files and development libraries for compiling ATM (Asynchronous 
+ Transfer Mode) related programs.
+ .
+ Homepage: http://linux-atm.sourceforge.net/

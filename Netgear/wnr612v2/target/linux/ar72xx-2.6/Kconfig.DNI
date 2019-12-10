@@ -1,0 +1,50 @@
+#
+# DNI Source Kernel Configuration
+#
+
+# comment 'DNI Source Kernel Configuration'
+config IP_NF_NAT_PROTO_ESP
+	tristate  'ESP protocol connection tracking support (EXPERIMENTAL)'
+	depends on IP_NF_CONNTRACK
+	help
+	  With this option enabled, the connection tracking code will
+	  be able to do state tracking on ESP connections.
+
+config DNI_IPV6_PASSTHROUGH
+	tristate  'provide IPv6 passthrough'
+	help
+	  enable ipv6 passthrough function
+
+config DNI_MCAST_TO_UNICAST
+	tristate  'to replace the multicast mac address to unicast mac address in wireless interface'
+	help
+	  to enhacnce streaming performance in wireless interface 
+	  
+config DNI_PHYSICAL_INGRESS_ID
+	tristate  'provide physical port ingress'
+	help
+		enable iptables ingress port option
+
+config DNI_LIMIT_P2P_SESSION
+	tristate  'provide limit of P2P connection'
+	help
+		enable limit of P2P connection
+
+config DNI_PRIORITY_CONFLICT
+	tristate  'provide iptables set mark rules'
+	help
+		only when nfmark is null or low prio to high prio can be set 
+
+config DNI_NAT_SESS_MGNT
+	tristate  'provide NAT session management function for NETGEAR\'s router spec. '
+	help
+		provide NAT session management function for NETGEAR's router spec.
+
+config DNI_DEV_STATISTIC_PATCH
+	tristate  'enlarge the dev statistic values (TX and RX statistic)'
+	help
+		to enlarge the dev statistic values
+config DNI_MULTI_LAN_SUPPORT
+	tristate  'to split the ethernet driver to multi-ones'
+	help
+		to split the ethernet driver to multi-ones

@@ -1,0 +1,704 @@
+# 1 "<stdin>"
+# 1 "<built-in>"
+# 1 "<command line>"
+# 1 "<stdin>"
+
+
+
+
+
+# 1 "../../config.h" 1
+# 7 "<stdin>" 2
+
+
+
+
+include "atmsap.h"
+include "uni.h"
+# 26 "<stdin>"
+def ie_aal = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ aal_type <8> = case {
+     5 {
+  _id "atm_aalp" <8> = multi {
+      ATM_AALP_FW_MAX_SDU {
+   fw_max_sdu <16>
+      }
+      ATM_AALP_BW_MAX_SDU {
+   bw_max_sdu <16>
+      }
+
+      ATM_AALP_AAL_MODE {
+   aal_mode <8> # UNI 3.0 only
+      }
+
+      ATM_AALP_SSCS {
+   sscs_type <8>
+      }
+  }
+     }
+ }
+    }
+}
+# 90 "<stdin>"
+def ie_td = { # UNI 3.0 calls this "User Cell Rate"
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _id "atm_td" <8> = multi {
+     ATM_TD_FW_PCR_0 { _dummy <0> = length {}fw_pcr_0 <24> } ATM_TD_BW_PCR_0 { _dummy <0> = length {}bw_pcr_0 <24> } ATM_TD_FW_PCR_01 { _dummy <0> = length {}fw_pcr_01 <24> } ATM_TD_BW_PCR_01 { _dummy <0> = length {}bw_pcr_01 <24> } ATM_TD_FW_SCR_0 { _dummy <0> = length {}fw_scr_0 <24> } ATM_TD_BW_SCR_0 { _dummy <0> = length {}bw_scr_0 <24> } ATM_TD_FW_SCR_01 { _dummy <0> = length {}fw_scr_01 <24> } ATM_TD_BW_SCR_01 { _dummy <0> = length {}bw_scr_01 <24> } ATM_TD_FW_MBS_0 { _dummy <0> = length {}fw_mbs_0 <24> } ATM_TD_BW_MBS_0 { _dummy <0> = length {}bw_mbs_0 <24> } ATM_TD_FW_MBS_01 { _dummy <0> = length {}fw_mbs_01 <24> } ATM_TD_BW_MBS_01 { _dummy <0> = length {}bw_mbs_01 <24> } ATM_TD_BEST_EFFORT { _dummy <0> = length {}best_effort <0> }
+# 104 "<stdin>"
+     ATM_TD_TM_OPT { # @@@ should this also go into the TD macro ?
+
+  fw_fdisc "atm_fd" <1@8,more> = ATM_FD_NO
+  bw_fdisc "atm_fd" <1@7,more> = ATM_FD_NO
+
+  bw_tag "atm_tag" <1@2,more> = ATM_TAG_NO
+  fw_tag "atm_tag" <1@1> = ATM_TAG_NO
+     }
+ }
+    }
+}
+
+
+def ie_bbcap = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ bearer_class "atm_bc" <5@1,more>
+ _ext <1@8> = case {
+     0 {
+  _ext <1@8,more> = 1
+  trans_cap "atm_tc" <7@1>
+     }
+     default 1 {}
+ }
+ _ext <1@8,more> = 1
+ susc_clip "atm_stc" <2@6,more> = ATM_STC_NO
+ upcc "atm_upcc" <2@1> = ATM_UPCC_P2P
+    }
+}
+
+
+def ie_bhli = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ hli_type <7@1> = case {
+
+
+     0 { # ISO
+  iso_hli <-64>
+     }
+     1 { # User Specific
+  user_hli <-64>
+     }
+
+     2 { # High layer profile - UNI 3.0 only
+  hlp <32>
+     }
+
+     3 { # Vendor-Specific Application identifier
+  hli_oui <24>
+  app_id <32>
+     }
+
+     4 { # Reference to ITU-T SG 1 B-ISDN Teleservice Recommendation
+  tobedefined <8>
+     }
+
+ }
+    }
+}
+
+
+def ie_blli = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _lid <2@6,more> = multi {
+     1 {
+  _ext <1@8,more> = 1
+  uil1_proto <5@1>
+     }
+     2 {
+  uil2_proto "atm_l2" <5@1,more> = case {
+      ATM_L2_X25_LL,ATM_L2_X25_ML,ATM_L2_HDLC_ARM,
+        ATM_L2_HDLC_NRM,ATM_L2_HDLC_ABM,ATM_L2_Q922,
+        ATM_L2_ISO7776 { # CCITT encoding
+   _ext <1@8> = case {
+       0 {
+    l2_mode "atm_imd" <2@6,more> = ATM_IMD_NORMAL
+    q933 <2@1,more> = 0
+    _ext <1@8> = case {
+        0 {
+     window_size <7@1,more>
+     _ext <1@8> = 1
+        }
+        default 1 {}
+    }
+       }
+       default 1 {}
+   }
+      }
+      ATM_L2_USER { # User specified
+   _ext <1@8> = 0
+   user_l2 <7@1,more>
+   _ext <1@8> = 1
+      }
+      default ATM_L2_ISO1745,ATM_L2_Q291,ATM_L2_LAPB,
+        ATM_L2_ISO8802,ATM_L2_X75 { # No additional data
+   _ext <1@8> = 1
+      }
+  }
+     }
+     3 {
+  uil3_proto "atm_l3" <5@1,more> = case {
+      ATM_L3_X25,ATM_L3_ISO8208,ATM_L3_X223 { # CCITT coding
+   _ext <1@8> = case {
+       0 {
+    l3_mode "atm_imd" <2@6,more> = ATM_IMD_NORMAL
+    _ext <1@8> = case {
+        0 {
+     def_pck_size <4@1,more>
+     _ext <1@8> = case {
+         0 {
+      _ext <1@8> = 1
+      pck_win_size <7@1>
+         }
+         default 1 {}
+     }
+        }
+        default 1 {}
+    }
+       }
+       default 1 {}
+   }
+      }
+
+      ATM_L3_H310 { # ITU-T Rec. H.310
+   _ext <1@8> = case {
+       0 {
+    term_type "atm_tt" <4@1,more> = ATM_TT_RXTX
+    _ext <1@8> = case {
+        0 {
+     _ext <1@8,more> = 1
+     fw_mpx_cap "atm_mc" <3@4,more> =
+       ATM_MC_NONE
+     bw_mpx_cap "atm_mc" <3@1> = ATM_MC_NONE
+        }
+        default 1 {}
+    }
+       }
+       default 1 {}
+   }
+      }
+
+      ATM_L3_TR9577 { # ISO/IEC TR9577
+   _ext <1@8> = case {
+       0 {
+    _ext <1@8,more> = 0
+    ipi_high <7@1> = case {
+        0x40 { # SNAP hack
+     _ext <1@8,more> = 1
+     _ipi_low <1@7> = case { # ugly
+         0 {
+      _ext <1@8,more> = 1
+      _snap_id <2@6> = 0
+      oui <24>
+      pid <16>
+         }
+         default 1 {}
+     }
+        }
+        default 0x0 { # ugly
+     _ext <1@8,more> = 1
+     ipi_low <1@7>
+        }
+    }
+       }
+       default 1 {}
+   }
+      }
+      ATM_L3_USER { # User specified
+   _ext <1@8> = 0
+   user_l3 <7@1,more>
+   _ext <1@8> = 1
+      }
+  }
+     }
+ }
+    }
+}
+
+
+def ie_call_state = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ call_state <6@1>
+    }
+}
+
+
+def ie_cdpn = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ _plan "atm_np" <4@1,more> = case {
+     ATM_NP_E164 {
+  _type "atm_ton" <3@5> = ATM_TON_INTRNTNL
+  cdpn_e164 <-96>
+     }
+     ATM_NP_AEA { # ATM Endsystem Address
+  _type "atm_ton" <3@5> = ATM_TON_UNKNOWN
+  cdpn_esa <-160>
+     }
+ }
+    }
+}
+
+
+def ie_cdps = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+
+
+
+
+ cdps_type "atm_sat" <3@5,more> = ATM_SAT_AEA
+
+ _oddeven <1@4> = 0
+ cdps <-160>
+    }
+}
+
+
+def ie_cgpn = { # @@@ extend language to allow same trick as for cdpn
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ cgpn_plan "atm_np" <4@1,more>
+ cgpn_type "atm_ton" <3@5,more>
+ _ext <1@8> = case {
+     0 {
+  _ext <1@8,more> = 1
+  pres_ind "atm_prs" <2@6,more> = ATM_PRS_ALLOW
+  scr_ind "atm_scrn" <2@1> = ATM_SCRN_UP_NS
+     }
+     default 1 {}
+ }
+ cgpn <-160>
+    }
+}
+
+
+def ie_cgps = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+
+
+
+
+ cgps_type "atm_sat" <3@5,more> = ATM_SAT_AEA
+
+ _oddeven <1@4> = 0
+ cgps <-160>
+    }
+}
+
+
+def ie_cause = {
+    _ext <1@8,more> = 1 cause_cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ location "atm_loc" <4@1> = ATM_LOC_USER
+ _ext <1@8,more> = 1
+ cause "atm_cv" <7@1> = case {
+     ATM_CV_UNALLOC,ATM_CV_NO_ROUTE_DEST,ATM_CV_QOS_UNAVAIL { # Note 2
+  break
+  _ext <1@8,more> = 1
+  pu "atm_pu" <1@4,more> = ATM_PU_USER
+  na "atm_na" <1@3,more> = ATM_NA_NORMAL
+  cond2 "atm_cond" <2@1> = ATM_COND_UNKNOWN
+     }
+     ATM_CV_CALL_REJ { # Note 3
+  break
+  _ext <1@8,more> = 1
+  cond3 "atm_cond" <2@1,more> = ATM_COND_UNKNOWN
+  reason <5@3> = case {
+      ATM_RSN_USER {
+   user_diag <-216>
+      }
+      ATM_RSN_IE_MISS,ATM_RSN_IE_INSUFF {
+   ie_id3 "atm_ie" <8>
+      }
+  }
+     }
+     ATM_CV_NUM_CHANGED { # Note 4
+  break
+  new_dest <-224> # good luck ...
+     }
+     ATM_CV_REJ_CLIR { # Note 5
+  break
+  invalid <8> # not supported
+     }
+     ATM_CV_ACC_INF_DISC,ATM_CV_INCOMP_DEST,ATM_CV_MAND_IE_MISSING,
+       ATM_CV_UNKNOWN_IE,ATM_CV_INVALID_IE { # Note 6
+  break
+  ie_id6 <-224>
+     }
+
+     ATM_CV_UCR_UNAVAIL_OLD,ATM_CV_UCR_UNAVAIL_NEW { # Note 8
+
+
+
+
+
+
+
+  break
+  ucr_id <-224>
+     }
+     ATM_CV_NO_SUCH_CHAN { # Note 9
+  break
+  unav_vpci <16>
+  unav_vci <16>
+     }
+     ATM_CV_UNKNOWN_MSG_TYPE,ATM_CV_INCOMP_MSG { # Note 10
+  break
+  bad_msg_type "atm_msg" <8>
+     }
+     ATM_CV_TIMER_EXP { # Note 11
+  break
+  timer <24>
+     }
+     default 0 {}
+ }
+    }
+}
+
+
+def ie_conn_id = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ _vp_ass "atm_vpa" <2@4,more> = ATM_VPA_EXPL
+ _pref_exc "atm_poe" <3@1> = 0
+ vpi <16>
+ vci <16>
+    }
+}
+
+
+
+
+def ie_e2e_tdl = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _id "atm_tdl" <8> = multi {
+     ATM_TDL_CUM {
+  cum_delay <16>
+     }
+     ATM_TDL_E2EMAX {
+  max_delay <16>
+     }
+     ATM_TDL_NGI {}
+ }
+
+    }
+}
+
+
+
+
+def ie_qos = {
+# 467 "<stdin>"
+    _ext <1@8,more> = 1 qos_cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+
+ qos_fw <8> = 0
+ qos_bw <8> = 0
+    }
+}
+
+
+def ie_bbrep = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ rep_ind <4@1> = 2
+    }
+}
+
+
+def ie_restart = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ rst_class <3@1>
+    }
+}
+
+
+def ie_bbs_comp = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ bbsc_ind <7@1> = 0x21
+    }
+}
+
+
+def ie_tns = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ _net_type "atm_tni" <3@5,more> = ATM_TNI_NNI
+ _carrier_id "atm_nip" <4@1> = ATM_NIP_CARRIER
+ net_id <-32>
+    }
+}
+
+
+
+
+def ie_notify = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ notification <-32> # @@@ how many actually ?
+    }
+}
+
+
+def ie_oam_td = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ext <1@8,more> = 1
+ shaping "atm_shi" <2@6,more> = ATM_SHI_NONE
+ compliance "atm_oci" <1@5,more> = ATM_OCI_OPT
+ fault "atm_unfm" <3@1> = ATM_UNFM_NONE
+ _ext <1@8,more> = 1
+ fwd_ofi "atm_ofi" <3@5,more> = ATM_OFI_0_0
+ bwd_ofi "atm_ofi" <3@1> = ATM_OFI_0_0
+    }
+}
+
+
+def ie_git = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _dummy <1@8> = 0 # bit is "spare", although not indicated in spec
+ id_std_app "atm_irs" <7@1> = case {
+     ATM_IRS_DSMCC,ATM_IRS_H245 {
+  _type "atm_it" <8> = ATM_IT_SESSION
+  _length <8> = length {
+      session_id <-160>
+  }
+  _type "atm_it" <8> = ATM_IT_RESOURCE
+  _length <8> = length {
+      resource_id <-32>
+  }
+     }
+     default 0 {
+  unrecognized_git_identifiers <-224> # 33-5 bytes
+     }
+ }
+    }
+}
+
+
+def ie_lij_id = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _ext <1@8,more> = 1
+ lij_id_type "atm_lit" <7@1> = ATM_LIT_ROOT
+ lij_id <32>
+    }
+}
+
+
+def ie_lij_prm = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _ext <1@8,more> = 1
+ lij_scr_ind "atm_lsi" <2@1>
+    }
+}
+
+
+def ie_leaf_sn = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ leaf_sn <32>
+    }
+}
+
+
+def ie_scope_sel = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _ext <1@8,more> = 1
+ scope_type "atm_tcs" <4@1> = ATM_TCS_ORGANIZATIONAL
+ scope_sel "atm_css" <8>
+    }
+}
+
+
+def ie_alt_td = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _id "atm_td" <8> = multi {
+     ATM_TD_FW_PCR_0 { altfw_pcr_0 <24> } ATM_TD_BW_PCR_0 { altbw_pcr_0 <24> } ATM_TD_FW_PCR_01 { altfw_pcr_01 <24> } ATM_TD_BW_PCR_01 { altbw_pcr_01 <24> } ATM_TD_FW_SCR_0 { altfw_scr_0 <24> } ATM_TD_BW_SCR_0 { altbw_scr_0 <24> } ATM_TD_FW_SCR_01 { altfw_scr_01 <24> } ATM_TD_BW_SCR_01 { altbw_scr_01 <24> } ATM_TD_FW_MBS_0 { altfw_mbs_0 <24> } ATM_TD_BW_MBS_0 { altbw_mbs_0 <24> } ATM_TD_FW_MBS_01 { altfw_mbs_01 <24> } ATM_TD_BW_MBS_01 { altbw_mbs_01 <24> } ATM_TD_BEST_EFFORT { altbest_effort <0> }
+ }
+    }
+}
+
+
+def ie_min_td = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _id "atm_td" <8> = multi {
+     ATM_TD_FW_PCR_0 { minfw_pcr_0 <24> } ATM_TD_BW_PCR_0 { minbw_pcr_0 <24> } ATM_TD_FW_PCR_01 { minfw_pcr_01 <24> } ATM_TD_BW_PCR_01 { minbw_pcr_01 <24> }
+     ATM_TD_FW_MCR_01 { minfw_mcr_01 <24> } ATM_TD_BW_MCR_01 { minbw_mcr_01 <24> }
+ }
+    }
+}
+
+
+def ie_eqos = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ eqos_origin "atm_eqo" <8>
+ _id "atm_eqp" <8> = multi {
+     ATM_EQP_ACC_FW_CDV {
+  acc_fw_cdv <24>
+     }
+     ATM_EQP_ACC_BW_CDV {
+  acc_bw_cdv <24>
+     }
+     ATM_EQP_CUM_FW_CDV {
+  cum_fw_cdv <24>
+     }
+     ATM_EQP_CUM_BW_CDV {
+  cum_bw_cdv <24>
+     }
+     ATM_EQP_ACC_FW_CLR {
+  acc_fw_clr <8>
+     }
+     ATM_EQP_ACC_BW_CLR {
+  acc_bw_clr <8>
+     }
+ }
+    }
+}
+
+
+def ie_abr_add_prm = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _id "atm_aap" <8> = multi {
+     ATM_AAP_FW_REC {
+  abr_fw_add_rec <32>
+     }
+     ATM_AAP_BW_REC {
+  abr_bw_add_rec <32>
+     }
+ }
+    }
+}
+
+
+def ie_abr_set_prm = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_NET _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length { # @@@ UNI 4.0 does not specify the coding
+ _id "atm_asp" <8> = multi {
+     ATM_ASP_FW_ICR {
+  abr_fw_icr <24>
+     }
+     ATM_ASP_BW_ICR {
+  abr_bw_icr <24>
+     }
+     ATM_ASP_FW_TBE {
+  abr_fw_tbe <24>
+     }
+     ATM_ASP_BW_TBE {
+  abr_bw_tbe <24>
+     }
+     ATM_ASP_CRF_RTT {
+  atm_crf_rtt <24>
+     }
+     ATM_ASP_FW_RIF {
+  atm_fw_rif <8>
+     }
+     ATM_ASP_BW_RIF {
+  atm_bw_rif <8>
+     }
+     ATM_ASP_FW_RDF {
+  atm_fw_rdf <8>
+     }
+     ATM_ASP_BW_RDF {
+  atm_bw_rdf <8>
+     }
+ }
+    }
+}
+
+
+
+
+def ie_ep_ref = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ _ep_type <8> = 0
+ ep_ref <16>
+    }
+}
+
+
+def ie_ep_state = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ ep_state <6@1>
+    }
+}
+
+
+
+
+def ie_bbrt = {
+    _ext <1@8,more> = 1 _cs "q2931_cs" <2@6,more> = Q2931_CS_ITU _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length {
+ type_of_report "atm_tor" <8>
+    }
+}
+
+
+
+
+{
+    _pdsc "q2931_proto" <8> = Q2931_PROTO_DSC
+    _cr_len <8> = 3
+    call_ref <24>
+    msg_type "atm_msg" <8>
+    _ext <1@8,more> = 1
+    _flag "atm_flag" <1@5,more> = ATM_FLAG_NO
+    _action_ind "atm_ai_msg" <2@1> = 0
+    msg_len <16> = length {
+ _ie_id "atm_ie" <8> = multi {
+     aal: ATM_IE_AAL ie_aal
+     td: ATM_IE_TD ie_td
+     bbcap: ATM_IE_BBCAP ie_bbcap
+     bhli: ATM_IE_BHLI ie_bhli
+     blli1: ATM_IE_BLLI ie_blli
+     blli2: ATM_IE_BLLI ie_blli
+     blli3: ATM_IE_BLLI ie_blli
+     call_state: ATM_IE_CALL_STATE ie_call_state
+     cdpn: ATM_IE_CDPN ie_cdpn
+     cdps: ATM_IE_CDPS ie_cdps
+     cgpn: ATM_IE_CGPN ie_cgpn
+     cgps: ATM_IE_CGPS ie_cgps
+     cause: ATM_IE_CAUSE ie_cause
+     cause2: ATM_IE_CAUSE ie_cause
+     conn_id: ATM_IE_CONN_ID ie_conn_id
+
+     e2e_tdl: ATM_IE_E2E_TDL ie_e2e_tdl
+
+     qos: ATM_IE_QOS ie_qos
+     bbrep: ATM_IE_BBREP ie_bbrep
+     restart: ATM_IE_RESTART ie_restart
+     bbs_comp: ATM_IE_BBS_COMP ie_bbs_comp
+     tns: ATM_IE_TNS ie_tns
+
+     notify: ATM_IE_NOTIFY ie_notify
+     oam_td: ATM_IE_OAM_TD ie_oam_td
+     git: ATM_IE_GIT ie_git
+     git2: ATM_IE_GIT ie_git
+     git3: ATM_IE_GIT ie_git
+     lij_id: ATM_IE_LIJ_ID ie_lij_id
+     lij_prm: ATM_IE_LIJ_PRM ie_lij_prm
+     leaf_sn: ATM_IE_LEAF_SN ie_leaf_sn
+     scope_sel: ATM_IE_SCOPE_SEL ie_scope_sel
+     alt_td: ATM_IE_ALT_TD ie_alt_td
+     min_td: ATM_IE_MIN_TD ie_min_td
+     eqos: ATM_IE_EQOS ie_eqos
+     abr_add_prm:ATM_IE_ABR_ADD_PRM ie_abr_add_prm
+     abr_set_prm:ATM_IE_ABR_SET_PRM ie_abr_set_prm
+
+     ep_ref: ATM_IE_EPR ie_ep_ref
+     ep_state: ATM_IE_EP_STATE ie_ep_state
+
+     bbrt: ATM_IE_BBRT ie_bbrt
+
+     default 0 {
+  _ext <1@8,more> = 1 __cs "q2931_cs" <2@6,more> = 0 _flag "atm_flag" <1@5,more> = ATM_FLAG_NO _action_ind "atm_ai_ie" <3@1> = 0 _ie_len <16> = recover RECOV_IND_IE length
+      abort RECOV_ASE_UNKNOWN_IE
+     }
+ }
+    }
+}

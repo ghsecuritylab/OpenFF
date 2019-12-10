@@ -1,0 +1,6 @@
+This modules matches a given url by using some pattern matching strategy. It requires a linux kernel >= 2.6.14.
+.TP
+.BI "--url " "pattern"
+.TP
+.BI "--state " "pattern"
+Matches the given pattern.

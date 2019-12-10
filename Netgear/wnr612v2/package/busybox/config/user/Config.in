@@ -1,0 +1,26 @@
+#
+# For a description of the syntax of this configuration file,
+# see scripts/kbuild/config-language.txt.
+#
+
+menu "User Utilities"
+
+config CONFIG_DETCABLE
+	bool "Enable detcable"
+	default n
+	help
+	  detect wan cable and return (no matter in which status)
+
+config CONFIG_MY_PRINT
+	bool "Enable my_print"
+	default n
+	help
+	  Enable my_print support to busybox
+
+config CONFIG_WANWD
+	bool "Enable wanwd"
+	default n
+	help
+	  Enable wanwd to detect wan cable
+
+endmenu
